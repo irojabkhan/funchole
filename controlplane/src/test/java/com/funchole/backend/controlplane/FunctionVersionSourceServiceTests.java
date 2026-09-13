@@ -71,7 +71,7 @@ class FunctionVersionSourceServiceTests {
     @Test
     void validMultiFileSourceSubmissionIsStoredAndReadableBack() {
         FunctionVersion functionVersion = createFunctionVersion();
-        SourceBundle bundle = new SourceBundle("NODE", "20", "index.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", "20", "index.js", "handler", List.of(
                 new SourceFile("index.js", "console.log('hi')"),
                 new SourceFile("lib/util.js", "module.exports = {}")
         ));
@@ -105,9 +105,9 @@ class FunctionVersionSourceServiceTests {
         FunctionVersion versionOne = createFunctionVersion();
         FunctionVersion versionTwo = createFunctionVersion();
 
-        sourceService.submitSource(versionOne.getId(), new SourceBundle("NODE", null, "a.js", List.of(
+        sourceService.submitSource(versionOne.getId(), new SourceBundle("NODE", null, "a.js", "handler", List.of(
                 new SourceFile("a.js", "one"))));
-        sourceService.submitSource(versionTwo.getId(), new SourceBundle("NODE", null, "b.js", List.of(
+        sourceService.submitSource(versionTwo.getId(), new SourceBundle("NODE", null, "b.js", "handler", List.of(
                 new SourceFile("b.js", "two"))));
 
         assertThat(sourceService.findSource(versionOne.getId()).orElseThrow().entrypoint()).isEqualTo("a.js");
@@ -123,7 +123,7 @@ class FunctionVersionSourceServiceTests {
     @Test
     void nestedRelativePathsAreAccepted() {
         FunctionVersion functionVersion = createFunctionVersion();
-        SourceBundle bundle = new SourceBundle("NODE", null, "src/handlers/index.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", null, "src/handlers/index.js", "handler", List.of(
                 new SourceFile("src/handlers/index.js", "handler"),
                 new SourceFile("src/handlers/nested/deep/helper.js", "helper")
         ));
@@ -138,7 +138,7 @@ class FunctionVersionSourceServiceTests {
     @Test
     void absolutePathsAreRejected() {
         FunctionVersion functionVersion = createFunctionVersion();
-        SourceBundle bundle = new SourceBundle("NODE", null, "/index.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", null, "/index.js", "handler", List.of(
                 new SourceFile("/index.js", "console.log('hi')")));
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), bundle))
@@ -148,7 +148,7 @@ class FunctionVersionSourceServiceTests {
     @Test
     void traversalPathsAreRejected() {
         FunctionVersion functionVersion = createFunctionVersion();
-        SourceBundle bundle = new SourceBundle("NODE", null, "../index.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", null, "../index.js", "handler", List.of(
                 new SourceFile("../index.js", "console.log('hi')")));
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), bundle))
@@ -158,7 +158,7 @@ class FunctionVersionSourceServiceTests {
     @Test
     void duplicatePathsAreRejected() {
         FunctionVersion functionVersion = createFunctionVersion();
-        SourceBundle bundle = new SourceBundle("NODE", null, "index.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", null, "index.js", "handler", List.of(
                 new SourceFile("index.js", "one"),
                 new SourceFile("index.js", "two")
         ));
@@ -170,7 +170,7 @@ class FunctionVersionSourceServiceTests {
     @Test
     void missingEntrypointIsRejected() {
         FunctionVersion functionVersion = createFunctionVersion();
-        SourceBundle bundle = new SourceBundle("NODE", null, "missing.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", null, "missing.js", "handler", List.of(
                 new SourceFile("index.js", "console.log('hi')")));
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), bundle))
@@ -201,11 +201,11 @@ class FunctionVersionSourceServiceTests {
     void draftVersionAllowsIterativeSourceReplacement() {
         FunctionVersion functionVersion = createFunctionVersion();
 
-        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", null, "a.js", List.of(
+        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", null, "a.js", "handler", List.of(
                 new SourceFile("a.js", "version A"))));
-        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", null, "b.js", List.of(
+        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", null, "b.js", "handler", List.of(
                 new SourceFile("b.js", "version B"))));
-        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", null, "c.js", List.of(
+        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", null, "c.js", "handler", List.of(
                 new SourceFile("c.js", "version C"))));
 
         SourceBundle retrieved = sourceService.findSource(functionVersion.getId()).orElseThrow();
@@ -220,7 +220,7 @@ class FunctionVersionSourceServiceTests {
         lifecycleRegistry.beginPublishing(functionVersion.getId());
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                "NODE", null, "other.js", List.of(new SourceFile("other.js", "rejected")))))
+                "NODE", null, "other.js", "handler", List.of(new SourceFile("other.js", "rejected")))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("PUBLISHING");
     }
@@ -233,7 +233,7 @@ class FunctionVersionSourceServiceTests {
         lifecycleRegistry.markReady(functionVersion.getId());
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                "NODE", null, "other.js", List.of(new SourceFile("other.js", "rejected")))))
+                "NODE", null, "other.js", "handler", List.of(new SourceFile("other.js", "rejected")))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("READY");
     }
@@ -246,7 +246,7 @@ class FunctionVersionSourceServiceTests {
         lifecycleRegistry.markFailed(functionVersion.getId());
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                "NODE", null, "other.js", List.of(new SourceFile("other.js", "rejected")))))
+                "NODE", null, "other.js", "handler", List.of(new SourceFile("other.js", "rejected")))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("FAILED");
     }
@@ -258,7 +258,7 @@ class FunctionVersionSourceServiceTests {
         lifecycleRegistry.beginPublishing(functionVersion.getId());
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                "NODE", null, "other.js", List.of(new SourceFile("other.js", "rejected")))))
+                "NODE", null, "other.js", "handler", List.of(new SourceFile("other.js", "rejected")))))
                 .isInstanceOf(IllegalStateException.class);
 
         SourceBundle retrieved = sourceService.findSource(functionVersion.getId()).orElseThrow();
@@ -283,7 +283,7 @@ class FunctionVersionSourceServiceTests {
         lifecycleRegistry.markReady(functionVersion.getId());
 
         assertThatThrownBy(() -> sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                "NODE", null, "other.js", List.of(new SourceFile("other.js", "rejected")))))
+                "NODE", null, "other.js", "handler", List.of(new SourceFile("other.js", "rejected")))))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(functionVersionRepository.findById(functionVersion.getId()).orElseThrow().getArtifactMetadata())
@@ -316,7 +316,7 @@ class FunctionVersionSourceServiceTests {
     }
 
     private SourceBundle validBundle() {
-        return new SourceBundle("NODE", "20", "index.js", List.of(new SourceFile("index.js", "console.log('hi')")));
+        return new SourceBundle("NODE", "20", "index.js", "handler", List.of(new SourceFile("index.js", "console.log('hi')")));
     }
 
     private FunctionVersion createFunctionVersion() {

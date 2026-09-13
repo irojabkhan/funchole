@@ -282,6 +282,7 @@ public final class RuntimeWorkerServer implements AutoCloseable {
                 payload.componentId(),
                 payload.componentVersionId(),
                 artifact.get().artifactPath(),
+                artifact.get().handler(),
                 payload.input()
         );
 

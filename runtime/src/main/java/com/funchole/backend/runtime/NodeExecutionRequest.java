@@ -13,6 +13,7 @@ public record NodeExecutionRequest(
         UUID componentId,
         UUID componentVersionId,
         Path artifactPath,
+        String handler,
         String input
 ) {
 }

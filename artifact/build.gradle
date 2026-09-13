@@ -3,6 +3,9 @@ description = 'Storage-neutral artifact contracts: locate/publish artifacts by e
 dependencies {
     implementation 'software.amazon.awssdk:s3'
     implementation "org.apache.commons:commons-compress:${commonsCompressVersion}"
+    // Only for reading/writing the small ArtifactManifest file carried inside
+    // every artifact package - not a general-purpose dependency for this module.
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

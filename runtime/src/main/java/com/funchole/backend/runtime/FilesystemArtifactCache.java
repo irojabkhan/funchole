@@ -1,5 +1,6 @@
 package com.funchole.backend.runtime;
 
+import com.funchole.backend.artifact.ArtifactManifest;
 import com.funchole.backend.artifact.ArtifactReference;
 import java.io.IOException;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -13,14 +14,15 @@ import java.util.UUID;
 /**
  * Filesystem-backed {@link ArtifactCache}.
  *
- * Layout: {@code <cacheRoot>/<componentVersionId>/index.mjs} - one directory
- * per exact component version, so versions never collide and there is no
- * version-scan behavior. No eviction, no TTL, no cross-process locking
- * (documented limitations; future remote-store milestones can add them).
+ * Layout: {@code <cacheRoot>/<componentVersionId>/} - one directory per
+ * exact component version, so versions never collide and there is no
+ * version-scan behavior. The entrypoint file and handler function name are
+ * read from the {@link ArtifactManifest} inside that directory (which was
+ * copied in wholesale by {@link #put}, alongside every other artifact file).
+ * No eviction, no TTL, no cross-process locking (documented limitations;
+ * future remote-store milestones can add them).
  */
 public final class FilesystemArtifactCache implements ArtifactCache {
-
-    private static final String ENTRY_POINT_FILE_NAME = "index.mjs";
 
     private final Path cacheRoot;
     private final String runtimeType;
@@ -42,11 +44,14 @@ public final class FilesystemArtifactCache implements ArtifactCache {
         if (componentId == null || componentVersionId == null) {
             return Optional.empty();
         }
-        Path artifactPath = cacheEntry(componentVersionId).resolve(ENTRY_POINT_FILE_NAME);
+        Path entryDirectory = cacheEntry(componentVersionId);
+        ArtifactManifest manifest = ArtifactManifest.readOrDefault(entryDirectory);
+        Path artifactPath = entryDirectory.resolve(manifest.entrypoint());
         if (!Files.isRegularFile(artifactPath)) {
             return Optional.empty();
         }
-        return Optional.of(new ArtifactReference(componentId, componentVersionId, runtimeType, artifactPath.toAbsolutePath()));
+        return Optional.of(new ArtifactReference(
+                componentId, componentVersionId, runtimeType, artifactPath.toAbsolutePath(), manifest.handler()));
     }
 
     @Override

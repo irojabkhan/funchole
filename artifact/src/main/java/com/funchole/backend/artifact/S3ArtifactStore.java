@@ -28,7 +28,6 @@ import java.util.UUID;
 public final class S3ArtifactStore implements RemoteArtifactStore {
 
     private static final String ARTIFACT_FILE_NAME = "artifact.tar.gz";
-    private static final String ENTRY_POINT_FILE_NAME = "index.mjs";
 
     private final String runtimeType;
     private final S3ArtifactClient s3Client;
@@ -68,8 +67,10 @@ public final class S3ArtifactStore implements RemoteArtifactStore {
         Path extracted = createTempDirectory(componentVersionId, "extracted");
         try {
             ArtifactArchiveExtractor.extractTarGz(archive, extracted);
+            ArtifactManifest manifest = ArtifactManifest.readOrDefault(extracted);
             ArtifactReference reference = new ArtifactReference(
-                    componentId, componentVersionId, runtimeType, extracted.resolve(ENTRY_POINT_FILE_NAME));
+                    componentId, componentVersionId, runtimeType,
+                    extracted.resolve(manifest.entrypoint()), manifest.handler());
             return new RemoteArtifact(reference, extracted);
         } catch (RuntimeException exception) {
             // Extraction never successfully handed off - this store still

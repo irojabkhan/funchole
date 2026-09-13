@@ -12,6 +12,7 @@ record NodeExecuteMessage(
         UUID componentId,
         UUID componentVersionId,
         String artifactPath,
+        String handler,
         String input
 ) {
 
@@ -24,6 +25,7 @@ record NodeExecuteMessage(
                 request.componentId(),
                 request.componentVersionId(),
                 request.artifactPath().toString(),
+                request.handler(),
                 request.input()
         );
     }

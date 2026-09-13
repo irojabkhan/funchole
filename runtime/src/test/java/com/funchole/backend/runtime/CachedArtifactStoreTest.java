@@ -218,7 +218,8 @@ class CachedArtifactStoreTest {
                 Files.writeString(directory.resolve("index.mjs"), source);
                 materializedCount.incrementAndGet();
                 lastMaterializedDirectory = directory;
-                ArtifactReference reference = new ArtifactReference(componentId, componentVersionId, "NODE", directory.resolve("index.mjs"));
+                ArtifactReference reference = new ArtifactReference(
+                        componentId, componentVersionId, "NODE", directory.resolve("index.mjs"), "handler");
                 return Optional.of(new RemoteArtifact(reference, directory));
             } catch (IOException exception) {
                 throw new IllegalStateException("Failed to write fake remote artifact", exception);

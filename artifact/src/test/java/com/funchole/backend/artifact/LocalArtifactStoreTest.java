@@ -50,6 +50,36 @@ class LocalArtifactStoreTest {
     }
 
     @Test
+    void resolvesTheManifestEntrypointAndHandlerWhenPresent() throws Exception {
+        UUID componentId = UUID.randomUUID();
+        UUID componentVersionId = UUID.randomUUID();
+        Path directory = artifactsRoot.resolve(componentVersionId.toString());
+        Files.createDirectories(directory.resolve("src"));
+        Files.writeString(directory.resolve("src/main.mjs"), "export async function GrowUp(input) { return input; }");
+        new ArtifactManifest("src/main.mjs", "GrowUp").writeInto(directory);
+        ArtifactStore store = new LocalArtifactStore(artifactsRoot, "NODE");
+
+        Optional<ArtifactReference> resolved = store.resolve(componentId, componentVersionId);
+
+        assertTrue(resolved.isPresent());
+        assertTrue(resolved.get().artifactPath().toString().endsWith("src/main.mjs"));
+        assertEquals("GrowUp", resolved.get().handler());
+    }
+
+    @Test
+    void defaultsToIndexMjsAndHandlerWhenNoManifestIsPresent() throws Exception {
+        UUID componentId = UUID.randomUUID();
+        UUID componentVersionId = UUID.randomUUID();
+        writeArtifact(componentVersionId, "export async function handler(input) { return input; }");
+        ArtifactStore store = new LocalArtifactStore(artifactsRoot, "NODE");
+
+        Optional<ArtifactReference> resolved = store.resolve(componentId, componentVersionId);
+
+        assertTrue(resolved.isPresent());
+        assertEquals("handler", resolved.get().handler());
+    }
+
+    @Test
     void resolvesEmptyForUnknownComponentVersion() {
         ArtifactStore store = new LocalArtifactStore(artifactsRoot, "NODE");
 

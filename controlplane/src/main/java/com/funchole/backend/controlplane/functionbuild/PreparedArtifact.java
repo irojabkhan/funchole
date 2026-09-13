@@ -23,6 +23,7 @@ public final class PreparedArtifact implements AutoCloseable {
     private final UUID functionVersionId;
     private final Path artifactDirectory;
     private final String entrypoint;
+    private final String handler;
     private final String runtimeType;
     private final String runtimeVersion;
 
@@ -30,12 +31,14 @@ public final class PreparedArtifact implements AutoCloseable {
             UUID functionVersionId,
             Path artifactDirectory,
             String entrypoint,
+            String handler,
             String runtimeType,
             String runtimeVersion
     ) {
         this.functionVersionId = functionVersionId;
         this.artifactDirectory = artifactDirectory;
         this.entrypoint = entrypoint;
+        this.handler = handler;
         this.runtimeType = runtimeType;
         this.runtimeVersion = runtimeVersion;
     }
@@ -50,6 +53,10 @@ public final class PreparedArtifact implements AutoCloseable {
 
     public String entrypoint() {
         return entrypoint;
+    }
+
+    public String handler() {
+        return handler;
     }
 
     public String runtimeType() {

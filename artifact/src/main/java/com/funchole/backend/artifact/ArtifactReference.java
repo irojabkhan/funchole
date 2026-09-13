@@ -5,13 +5,15 @@ import java.util.UUID;
 
 /**
  * The exact executable artifact pinned to one componentId/componentVersionId
- * pair. This is local-filesystem-only for this milestone - no remote
- * storage, checksums, manifests, or cache metadata.
+ * pair, plus the exported function name ({@code handler}) within
+ * {@code artifactPath} to invoke - both read from the artifact's own
+ * {@link ArtifactManifest}, never from Postgres.
  */
 public record ArtifactReference(
         UUID componentId,
         UUID componentVersionId,
         String runtimeType,
-        Path artifactPath
+        Path artifactPath,
+        String handler
 ) {
 }

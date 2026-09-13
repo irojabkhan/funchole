@@ -45,6 +45,11 @@ import org.springframework.web.multipart.MultipartFile;
  * never taken from the request body either way - it always comes from the
  * owning FunctionVersion's own {@code runtime} field, so source submission
  * can never silently disagree with the version it is attached to.
+ *
+ * <p>{@code handler} names the exported function within {@code entrypoint}
+ * that should actually be invoked (e.g. {@code "GrowUp"} for
+ * {@code export async function GrowUp(input) {...}}) - it defaults to
+ * {@code "handler"} when omitted.
  */
 @RestController
 @RequestMapping("/api/v1/functions/{functionId}/versions/{versionId}/source")
@@ -71,7 +76,8 @@ public class FunctionVersionSourceController {
             @RequestPart(value = "file", required = false) @Nullable MultipartFile archive,
             @RequestPart(value = "files", required = false) @Nullable List<MultipartFile> individualFiles,
             @RequestParam String entrypoint,
-            @RequestParam(required = false) @Nullable String runtimeVersion
+            @RequestParam(required = false) @Nullable String runtimeVersion,
+            @RequestParam(required = false) @Nullable String handler
     ) {
         boolean hasArchive = archive != null && !archive.isEmpty();
         boolean hasIndividualFiles = individualFiles != null && !individualFiles.isEmpty();
@@ -85,7 +91,7 @@ public class FunctionVersionSourceController {
         List<SourceFile> files = hasArchive
                 ? SourceUploadReader.readZip(archive)
                 : SourceUploadReader.readFiles(individualFiles);
-        SourceBundle bundle = new SourceBundle(functionVersion.getRuntime(), runtimeVersion, entrypoint, files);
+        SourceBundle bundle = new SourceBundle(functionVersion.getRuntime(), runtimeVersion, entrypoint, handler, files);
 
         FunctionVersionSource source = functionVersionSourceService.submitSource(versionId, bundle);
         return ApiResponse.success(toResponse(source));
@@ -104,14 +110,14 @@ public class FunctionVersionSourceController {
 
         List<String> relativePaths = bundle.files().stream().map(SourceFile::relativePath).toList();
         return ApiResponse.success(new FunctionVersionSourceResponse(
-                versionId, bundle.runtimeType(), bundle.runtimeVersion(), bundle.entrypoint(), relativePaths));
+                versionId, bundle.runtimeType(), bundle.runtimeVersion(), bundle.entrypoint(), bundle.handler(), relativePaths));
     }
 
     private FunctionVersionSourceResponse toResponse(FunctionVersionSource source) {
         List<String> relativePaths = readPaths(source.getRelativePaths());
         return new FunctionVersionSourceResponse(
                 source.getFunctionVersionId(), source.getRuntimeType(), source.getRuntimeVersion(),
-                source.getEntrypoint(), relativePaths);
+                source.getEntrypoint(), source.getHandler(), relativePaths);
     }
 
     private List<String> readPaths(String relativePathsJson) {

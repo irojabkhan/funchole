@@ -8,6 +8,7 @@ public record FunctionVersionSourceResponse(
         String runtimeType,
         String runtimeVersion,
         String entrypoint,
+        String handler,
         List<String> relativePaths
 ) {
 }

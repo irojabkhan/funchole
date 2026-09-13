@@ -26,6 +26,7 @@ function sendError(executionId, code, message) {
 
 async function handleExecute(message) {
   const { executionId, artifactPath, input } = message;
+  const handlerName = message.handler || "handler";
 
   if (!artifactPath || !existsSync(artifactPath)) {
     sendError(executionId, "ARTIFACT_NOT_FOUND", `Artifact not found: ${artifactPath}`);
@@ -40,9 +41,9 @@ async function handleExecute(message) {
     return;
   }
 
-  const handler = loadedModule.handler;
+  const handler = loadedModule[handlerName];
   if (typeof handler !== "function") {
-    sendError(executionId, "HANDLER_NOT_FOUND", `Artifact does not export a 'handler' function: ${artifactPath}`);
+    sendError(executionId, "HANDLER_NOT_FOUND", `Artifact does not export a '${handlerName}' function: ${artifactPath}`);
     return;
   }
 

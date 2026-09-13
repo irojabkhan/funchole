@@ -60,7 +60,7 @@ class RuntimeBuilderRegistryTests {
         UUID functionVersionId = UUID.randomUUID();
         Path workspaceRoot = Files.createDirectory(tempDir.resolve("workspace"));
         Files.writeString(workspaceRoot.resolve("index.js"), "console.log('hi')");
-        BuildWorkspace workspace = new BuildWorkspace(functionVersionId, workspaceRoot, "index.js", "NODE", "20");
+        BuildWorkspace workspace = new BuildWorkspace(functionVersionId, workspaceRoot, "index.js", "handler", "NODE", "20");
 
         PreparedArtifact artifact = nodeRuntimeBuilder.build(workspace);
 

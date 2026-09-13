@@ -24,6 +24,7 @@ public final class BuildWorkspace implements AutoCloseable {
     private final UUID functionVersionId;
     private final Path root;
     private final String entrypoint;
+    private final String handler;
     private final String runtimeType;
     private final String runtimeVersion;
 
@@ -31,12 +32,14 @@ public final class BuildWorkspace implements AutoCloseable {
             UUID functionVersionId,
             Path root,
             String entrypoint,
+            String handler,
             String runtimeType,
             String runtimeVersion
     ) {
         this.functionVersionId = functionVersionId;
         this.root = root;
         this.entrypoint = entrypoint;
+        this.handler = handler;
         this.runtimeType = runtimeType;
         this.runtimeVersion = runtimeVersion;
     }
@@ -51,6 +54,10 @@ public final class BuildWorkspace implements AutoCloseable {
 
     public String entrypoint() {
         return entrypoint;
+    }
+
+    public String handler() {
+        return handler;
     }
 
     public String runtimeType() {

@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane.functionbuild.runtime.node;
 
+import com.funchole.backend.artifact.ArtifactManifest;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilder;
@@ -51,10 +52,15 @@ public class NodeRuntimeBuilder implements RuntimeBuilder {
         try {
             installDependenciesIfNeeded(workspace.functionVersionId(), artifactDirectory);
             verifyEntrypointStillExists(artifactDirectory, workspace.entrypoint());
+            // Written into the artifact itself (not just returned here) because
+            // this is the only copy of this information the Runtime Worker will
+            // ever see - it never queries the FuncHole database.
+            new ArtifactManifest(workspace.entrypoint(), workspace.handler()).writeInto(artifactDirectory);
             return new PreparedArtifact(
                     workspace.functionVersionId(),
                     artifactDirectory,
                     workspace.entrypoint(),
+                    workspace.handler(),
                     workspace.runtimeType(),
                     workspace.runtimeVersion()
             );

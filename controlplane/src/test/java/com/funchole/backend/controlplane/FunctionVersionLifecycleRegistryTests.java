@@ -246,7 +246,7 @@ class FunctionVersionLifecycleRegistryTests {
         createdFunctionIds.add(function.getId());
         FunctionVersion functionVersion = functionVersionRepository.save(FunctionVersion.create(function, 1, "NODE", null));
         sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                "NODE", "20", "index.js", List.of(new SourceFile("index.js", "console.log('hi')"))));
+                "NODE", "20", "index.js", "handler", List.of(new SourceFile("index.js", "console.log('hi')"))));
         return functionVersion;
     }
 

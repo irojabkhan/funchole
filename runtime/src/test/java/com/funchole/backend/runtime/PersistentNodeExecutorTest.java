@@ -47,6 +47,32 @@ class PersistentNodeExecutorTest {
     }
 
     @Test
+    void executesACustomExportedFunctionNameOtherThanHandler() throws Exception {
+        executor = PersistentNodeExecutor.start("node", SCRIPT_PATH);
+        Path artifact = writeArtifact("custom-name", "export async function GrowUp(input) { return input; }");
+
+        NodeExecutionRequest request = new NodeExecutionRequest(
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "GrowUp", "{\"n\":1}");
+        NodeExecutionResult result = executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+        assertTrue(result.success());
+        assertEquals("{\"n\":1}", result.output());
+    }
+
+    @Test
+    void mapsAMissingCustomHandlerNameToHandlerNotFound() throws Exception {
+        executor = PersistentNodeExecutor.start("node", SCRIPT_PATH);
+        Path artifact = writeArtifact("wrong-custom-name", "export async function GrowUp(input) { return input; }");
+
+        NodeExecutionRequest request = new NodeExecutionRequest(
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "NotExported", "{}");
+        NodeExecutionResult result = executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+        assertFalse(result.success());
+        assertEquals("HANDLER_NOT_FOUND", result.errorCode());
+    }
+
+    @Test
     void awaitsAsyncHandlerCorrectly() throws Exception {
         executor = PersistentNodeExecutor.start("node", SCRIPT_PATH);
         Path artifact = writeArtifact("async", """
@@ -130,7 +156,7 @@ class PersistentNodeExecutorTest {
 
         List<NodeExecutionRequest> requests = IntStream.range(0, 8)
                 .mapToObj(i -> new NodeExecutionRequest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                        artifact, "{\"n\":" + i + "}"))
+                        artifact, "handler", "{\"n\":" + i + "}"))
                 .toList();
 
         List<CompletableFuture<NodeExecutionResult>> futures = requests.stream()
@@ -151,7 +177,7 @@ class PersistentNodeExecutorTest {
 
         List<NodeExecutionRequest> requests = IntStream.range(0, 20)
                 .mapToObj(i -> new NodeExecutionRequest(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
-                        artifact, "{\"index\":" + i + "}"))
+                        artifact, "handler", "{\"index\":" + i + "}"))
                 .toList();
 
         List<CompletableFuture<NodeExecutionResult>> futures = requests.stream()
@@ -176,7 +202,7 @@ class PersistentNodeExecutorTest {
                 }
                 """);
         NodeExecutionRequest request = new NodeExecutionRequest(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "{}");
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "handler", "{}");
 
         CompletableFuture<NodeExecutionResult> pending = executor.execute(request).toCompletableFuture();
         Thread.sleep(100);
@@ -188,7 +214,7 @@ class PersistentNodeExecutorTest {
 
     private NodeExecutionResult execute(Path artifact, String input) throws Exception {
         NodeExecutionRequest request = new NodeExecutionRequest(
-                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, input);
+                UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "handler", input);
         return executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
     }
 

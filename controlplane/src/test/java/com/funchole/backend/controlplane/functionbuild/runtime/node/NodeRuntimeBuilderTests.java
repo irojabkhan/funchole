@@ -3,6 +3,7 @@ package com.funchole.backend.controlplane.functionbuild.runtime.node;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.funchole.backend.artifact.ArtifactManifest;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.process.ProcessExecutor;
@@ -38,6 +39,20 @@ class NodeRuntimeBuilderTests {
         try (PreparedArtifact artifact = builder.build(workspace)) {
             assertThat(processExecutor.invocationCount()).isZero();
             assertThat(readString(artifact.artifactDirectory().resolve("index.js"))).isEqualTo("console.log('hi')");
+        }
+    }
+
+    @Test
+    void writesAnArtifactManifestWithTheConfiguredEntrypointAndHandler() {
+        UUID functionVersionId = UUID.randomUUID();
+        BuildWorkspace workspace = new BuildWorkspace(
+                functionVersionId, workspaceRoot("src/main.mjs", "export async function GrowUp(input) { return input; }"),
+                "src/main.mjs", "GrowUp", "NODE", null);
+
+        try (PreparedArtifact artifact = builder.build(workspace)) {
+            ArtifactManifest manifest = ArtifactManifest.readOrDefault(artifact.artifactDirectory());
+            assertThat(manifest.entrypoint()).isEqualTo("src/main.mjs");
+            assertThat(manifest.handler()).isEqualTo("GrowUp");
         }
     }
 
@@ -166,15 +181,20 @@ class NodeRuntimeBuilderTests {
     }
 
     private BuildWorkspace workspaceWithFiles(UUID functionVersionId, String... pathsAndContents) {
+        String entrypoint = pathsAndContents[0];
+        Path root = workspaceRoot(pathsAndContents);
+        return new BuildWorkspace(functionVersionId, root, entrypoint, "handler", "NODE", "20");
+    }
+
+    private Path workspaceRoot(String... pathsAndContents) {
         try {
-            Path workspaceRoot = Files.createTempDirectory(tempDir, "workspace-");
-            String entrypoint = pathsAndContents[0];
+            Path root = Files.createTempDirectory(tempDir, "workspace-");
             for (int i = 0; i < pathsAndContents.length; i += 2) {
-                Path target = workspaceRoot.resolve(pathsAndContents[i]);
+                Path target = root.resolve(pathsAndContents[i]);
                 Files.createDirectories(target.getParent());
                 Files.writeString(target, pathsAndContents[i + 1]);
             }
-            return new BuildWorkspace(functionVersionId, workspaceRoot, entrypoint, "NODE", "20");
+            return root;
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }

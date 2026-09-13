@@ -37,6 +37,9 @@ public class FunctionVersionSource {
     @Column(nullable = false, length = 2048)
     private String entrypoint;
 
+    @Column(nullable = false, length = 255)
+    private String handler;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "relative_paths", nullable = false, columnDefinition = "jsonb")
     private String relativePaths;
@@ -63,6 +66,10 @@ public class FunctionVersionSource {
         return entrypoint;
     }
 
+    public String getHandler() {
+        return handler;
+    }
+
     public String getRelativePaths() {
         return relativePaths;
     }
@@ -75,10 +82,13 @@ public class FunctionVersionSource {
         return updatedAt;
     }
 
-    public void replaceWith(String runtimeType, String runtimeVersion, String entrypoint, String relativePaths) {
+    public void replaceWith(
+            String runtimeType, String runtimeVersion, String entrypoint, String handler, String relativePaths
+    ) {
         this.runtimeType = runtimeType;
         this.runtimeVersion = runtimeVersion;
         this.entrypoint = entrypoint;
+        this.handler = handler;
         this.relativePaths = relativePaths;
         this.updatedAt = OffsetDateTime.now();
     }
@@ -88,6 +98,7 @@ public class FunctionVersionSource {
             String runtimeType,
             String runtimeVersion,
             String entrypoint,
+            String handler,
             String relativePaths
     ) {
         FunctionVersionSource source = new FunctionVersionSource();
@@ -96,6 +107,7 @@ public class FunctionVersionSource {
         source.runtimeType = runtimeType;
         source.runtimeVersion = runtimeVersion;
         source.entrypoint = entrypoint;
+        source.handler = handler;
         source.relativePaths = relativePaths;
         source.createdAt = now;
         source.updatedAt = now;

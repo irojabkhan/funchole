@@ -350,7 +350,7 @@ class FunctionVersionDeploymentServiceTests {
     @Test
     void buildWorkspaceIsCreatedFromTheExactFunctionVersionSource() {
         FunctionVersion functionVersion = createFunctionVersion();
-        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", "20", "src/index.js", List.of(
+        sourceService.submitSource(functionVersion.getId(), new SourceBundle("NODE", "20", "src/index.js", "handler", List.of(
                 new SourceFile("src/index.js", "entry"),
                 new SourceFile("lib/util.js", "util")
         )));
@@ -499,7 +499,7 @@ class FunctionVersionDeploymentServiceTests {
         ));
         FunctionVersion functionVersion = functionVersionRepository.save(FunctionVersion.create(function, 1, runtime, null));
         sourceService.submitSource(functionVersion.getId(), new SourceBundle(
-                runtime, "1", "index.js", List.of(new SourceFile("index.js", "console.log('hi')"))));
+                runtime, "1", "index.js", "handler", List.of(new SourceFile("index.js", "console.log('hi')"))));
         return functionVersion;
     }
 
@@ -658,7 +658,7 @@ class FunctionVersionDeploymentServiceTests {
                 throw new UncheckedIOException(exception);
             }
             return new PreparedArtifact(
-                    workspace.functionVersionId(), artifactDirectory, workspace.entrypoint(),
+                    workspace.functionVersionId(), artifactDirectory, workspace.entrypoint(), workspace.handler(),
                     workspace.runtimeType(), workspace.runtimeVersion());
         }
 

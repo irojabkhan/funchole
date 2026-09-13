@@ -63,12 +63,27 @@ class FunctionVersionSourceIntegrationTests {
                 .andExpect(jsonPath("$.data.runtimeType").value("NODE"))
                 .andExpect(jsonPath("$.data.runtimeVersion").value("20"))
                 .andExpect(jsonPath("$.data.entrypoint").value("index.mjs"))
+                .andExpect(jsonPath("$.data.handler").value("handler"))
                 .andExpect(jsonPath("$.data.relativePaths", org.hamcrest.Matchers.containsInAnyOrder("index.mjs", "package.json")));
 
         mockMvc.perform(get("/api/v1/functions/{functionId}/versions/{versionId}/source", functionId, versionId)
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.entrypoint").value("index.mjs"));
+                .andExpect(jsonPath("$.data.entrypoint").value("index.mjs"))
+                .andExpect(jsonPath("$.data.handler").value("handler"));
+    }
+
+    @Test
+    void submitsSourceWithACustomExportedHandlerFunctionName() throws Exception {
+        MockMultipartFile archive = zipOf("index.mjs", "export async function GrowUp(input) { return input; }");
+
+        mockMvc.perform(multipart("/api/v1/functions/{functionId}/versions/{versionId}/source", functionId, versionId)
+                        .file(archive)
+                        .param("entrypoint", "index.mjs")
+                        .param("handler", "GrowUp")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.handler").value("GrowUp"));
     }
 
     @Test

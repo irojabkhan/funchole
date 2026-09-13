@@ -73,7 +73,7 @@ class BuildWorkspaceServiceTests {
 
     @Test
     void multiFileSourceMaterializesCorrectly() {
-        UUID functionVersionId = createPublishingVersionWithSource(new SourceBundle("NODE", "20", "index.js", List.of(
+        UUID functionVersionId = createPublishingVersionWithSource(new SourceBundle("NODE", "20", "index.js", "handler", List.of(
                 new SourceFile("index.js", "console.log('hi')"),
                 new SourceFile("package.json", "{}")
         )));
@@ -90,7 +90,7 @@ class BuildWorkspaceServiceTests {
 
     @Test
     void nestedPathsArePreserved() {
-        UUID functionVersionId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "src/index.js", List.of(
+        UUID functionVersionId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "src/index.js", "handler", List.of(
                 new SourceFile("src/index.js", "entry"),
                 new SourceFile("lib/client.js", "client")
         )));
@@ -103,7 +103,7 @@ class BuildWorkspaceServiceTests {
 
     @Test
     void entrypointExistsInWorkspace() {
-        UUID functionVersionId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "src/index.js", List.of(
+        UUID functionVersionId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "src/index.js", "handler", List.of(
                 new SourceFile("src/index.js", "entry"))));
 
         try (BuildWorkspace workspace = buildWorkspaceService.prepareWorkspace(functionVersionId)) {
@@ -136,7 +136,7 @@ class BuildWorkspaceServiceTests {
         // any file, so this exercises the build-time re-check directly with a
         // hand-built bundle that could never actually reach persistence.
         UUID functionVersionId = UUID.randomUUID();
-        SourceBundle bundle = new SourceBundle("NODE", null, "missing.js", List.of(new SourceFile("index.js", "entry")));
+        SourceBundle bundle = new SourceBundle("NODE", null, "missing.js", "handler", List.of(new SourceFile("index.js", "entry")));
 
         assertThatThrownBy(() -> buildWorkspaceService.materialize(functionVersionId, bundle))
                 .isInstanceOf(IllegalStateException.class)
@@ -149,7 +149,7 @@ class BuildWorkspaceServiceTests {
         // rejects traversal paths, so this proves the build stage does not
         // blindly trust whatever SourceBundle it is handed either.
         UUID functionVersionId = UUID.randomUUID();
-        SourceBundle bundle = new SourceBundle("NODE", null, "../escape.js", List.of(
+        SourceBundle bundle = new SourceBundle("NODE", null, "../escape.js", "handler", List.of(
                 new SourceFile("../escape.js", "malicious")));
 
         assertThatThrownBy(() -> buildWorkspaceService.materialize(functionVersionId, bundle))
@@ -159,9 +159,9 @@ class BuildWorkspaceServiceTests {
 
     @Test
     void differentFunctionVersionsUseIsolatedWorkspaces() {
-        UUID versionOneId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "a.js", List.of(
+        UUID versionOneId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "a.js", "handler", List.of(
                 new SourceFile("a.js", "one"))));
-        UUID versionTwoId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "b.js", List.of(
+        UUID versionTwoId = createPublishingVersionWithSource(new SourceBundle("NODE", null, "b.js", "handler", List.of(
                 new SourceFile("b.js", "two"))));
 
         try (BuildWorkspace workspaceOne = buildWorkspaceService.prepareWorkspace(versionOneId);
@@ -219,7 +219,7 @@ class BuildWorkspaceServiceTests {
     }
 
     private SourceBundle validBundle() {
-        return new SourceBundle("NODE", "20", "index.js", List.of(new SourceFile("index.js", "console.log('hi')")));
+        return new SourceBundle("NODE", "20", "index.js", "handler", List.of(new SourceFile("index.js", "console.log('hi')")));
     }
 
     private UUID createPublishingVersionWithSource(SourceBundle sourceBundle) {

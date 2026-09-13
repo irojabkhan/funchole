@@ -95,6 +95,7 @@ public class BuildWorkspaceService {
                     functionVersionId,
                     workspaceRoot,
                     sourceBundle.entrypoint(),
+                    sourceBundle.handler(),
                     sourceBundle.runtimeType(),
                     sourceBundle.runtimeVersion()
             );

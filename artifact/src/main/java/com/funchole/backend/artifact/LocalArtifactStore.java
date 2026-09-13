@@ -6,16 +6,17 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * First {@link ArtifactStore} implementation: the existing local directory
- * convention ({@code <artifactsRoot>/<componentVersionId>/index.mjs}).
+ * First {@link ArtifactStore} implementation: local directory convention
+ * {@code <artifactsRoot>/<componentVersionId>/}, with the entrypoint file
+ * and handler function name read from the {@link ArtifactManifest} inside
+ * that directory (falling back to {@link ArtifactManifest#defaults()} for
+ * artifacts published before the manifest existed).
  *
  * The lookup key is exclusively componentVersionId - no directory scanning,
  * no "latest" symlink convention, no filename-based version inference. An
  * unmapped componentVersionId simply resolves to nothing.
  */
 public final class LocalArtifactStore implements ArtifactStore {
-
-    private static final String ENTRY_POINT_FILE_NAME = "index.mjs";
 
     private final Path artifactsRoot;
     private final String runtimeType;
@@ -30,10 +31,13 @@ public final class LocalArtifactStore implements ArtifactStore {
         if (componentId == null || componentVersionId == null) {
             return Optional.empty();
         }
-        Path artifactPath = artifactsRoot.resolve(componentVersionId.toString()).resolve(ENTRY_POINT_FILE_NAME);
+        Path componentDirectory = artifactsRoot.resolve(componentVersionId.toString());
+        ArtifactManifest manifest = ArtifactManifest.readOrDefault(componentDirectory);
+        Path artifactPath = componentDirectory.resolve(manifest.entrypoint());
         if (!Files.isRegularFile(artifactPath)) {
             return Optional.empty();
         }
-        return Optional.of(new ArtifactReference(componentId, componentVersionId, runtimeType, artifactPath.toAbsolutePath()));
+        return Optional.of(new ArtifactReference(
+                componentId, componentVersionId, runtimeType, artifactPath.toAbsolutePath(), manifest.handler()));
     }
 }

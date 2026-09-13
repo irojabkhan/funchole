@@ -39,6 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class FunctionVersionSourceService {
 
+    private static final String DEFAULT_HANDLER = "handler";
+
     private final FunctionVersionRepository functionVersionRepository;
     private final FunctionVersionSourceRepository functionVersionSourceRepository;
     private final SourceStore sourceStore;
@@ -71,6 +73,7 @@ public class FunctionVersionSourceService {
                     "Function version must be DRAFT to submit source, current status is "
                             + functionVersion.getStatus() + ": " + functionVersionId);
         }
+        String handler = resolveHandler(sourceBundle.handler());
         validateSourceBundle(sourceBundle);
 
         List<String> relativePaths = sourceBundle.files().stream().map(SourceFile::relativePath).toList();
@@ -87,7 +90,7 @@ public class FunctionVersionSourceService {
                 .map(existing -> {
                     existing.replaceWith(
                             sourceBundle.runtimeType(), sourceBundle.runtimeVersion(), sourceBundle.entrypoint(),
-                            relativePathsJson);
+                            handler, relativePathsJson);
                     return existing;
                 })
                 .orElseGet(() -> FunctionVersionSource.create(
@@ -95,6 +98,7 @@ public class FunctionVersionSourceService {
                         sourceBundle.runtimeType(),
                         sourceBundle.runtimeVersion(),
                         sourceBundle.entrypoint(),
+                        handler,
                         relativePathsJson
                 ));
         return functionVersionSourceRepository.save(source);
@@ -105,10 +109,15 @@ public class FunctionVersionSourceService {
         return functionVersionSourceRepository.findById(functionVersionId).map(this::toSourceBundle);
     }
 
+    private String resolveHandler(String handler) {
+        return handler != null && !handler.isBlank() ? handler : DEFAULT_HANDLER;
+    }
+
     private SourceBundle toSourceBundle(FunctionVersionSource source) {
         List<String> relativePaths = readPaths(source.getRelativePaths());
         List<SourceFile> files = sourceStore.load(source.getFunctionVersionId(), relativePaths);
-        return new SourceBundle(source.getRuntimeType(), source.getRuntimeVersion(), source.getEntrypoint(), files);
+        return new SourceBundle(
+                source.getRuntimeType(), source.getRuntimeVersion(), source.getEntrypoint(), source.getHandler(), files);
     }
 
     private void validateSourceBundle(SourceBundle sourceBundle) {
