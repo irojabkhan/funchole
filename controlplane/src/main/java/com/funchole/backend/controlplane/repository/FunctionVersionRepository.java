@@ -5,6 +5,8 @@ import com.funchole.backend.controlplane.entity.FunctionVersion;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +17,11 @@ public interface FunctionVersionRepository extends JpaRepository<FunctionVersion
     Optional<FunctionVersion> findByIdAndFunction_Id(UUID id, UUID functionId);
 
     Optional<FunctionVersion> findByIdAndArtifactObjectKeyIsNotNullAndArtifactFormatIsNotNull(UUID id);
+
+    Page<FunctionVersion> findAllByFunction_Id(UUID functionId, Pageable pageable);
+
+    @Query("select coalesce(max(fv.version), 0) from FunctionVersion fv where fv.function.id = :functionId")
+    int findMaxVersion(@Param("functionId") UUID functionId);
 
     /**
      * Atomic compare-and-swap: flips {@code status} to {@code newStatus} only
