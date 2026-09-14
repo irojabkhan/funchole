@@ -86,7 +86,14 @@ public final class InvocationDispatcher {
                 executionPlanner, new InMemoryRuntimeExecutionGateway());
     }
 
-    InvocationDispatcher(
+    /**
+     * Public so a caller assembling every real component in-process (e.g. an
+     * end-to-end test standing up a real Dispatcher against a real
+     * {@link IpcRuntimeExecutionGateway} and Runtime Worker, mirroring what
+     * {@code DispatcherMain} already does) can inject a real
+     * {@link RuntimeExecutionGateway} without a test living in this package.
+     */
+    public InvocationDispatcher(
             Connection connection,
             InvocationRegistry invocationRegistry,
             InvocationStepExecutionRegistry stepExecutionRegistry,

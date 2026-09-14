@@ -58,6 +58,45 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-minio'
+    // Only to create the S3 bucket the MinIOContainer starts without, before
+    // Controlplane's real S3ArtifactPublisher (or the E2E test's own
+    // in-process S3ArtifactStore) can use it - not transitively exposed by
+    // implementation project(':artifact') above.
+    testImplementation 'software.amazon.awssdk:s3'
+    // Test-only cross-module visibility for STORY-M1-10's Zero-to-HTTP-Response
+    // E2E test, which wires real Dispatcher/Runtime Worker/Gateway instances
+    // in-process - this does NOT weaken the production runtimeOnly boundary
+    // above (controlplane's own main source still cannot compile against
+    // any of these), it only widens what the test source set can import.
+    testImplementation project(':invocation')
+    testImplementation project(':dispatcher')
+    testImplementation project(':runtime')
+    testImplementation project(':gateway')
+    testImplementation project(':runtime-registry')
+    testImplementation "io.nats:jnats:${natsVersion}"
+    testImplementation 'io.netty:netty-buffer'
+    testImplementation 'io.netty:netty-codec-http'
+    testImplementation 'io.netty:netty-common'
+    testImplementation 'io.netty:netty-handler'
+    testImplementation 'io.netty:netty-codec'
+    testImplementation 'io.netty:netty-transport'
+}
+
+tasks.named('test') {
+    useJUnitPlatform {
+        excludeTags 'e2e'
+    }
+}
+
+tasks.register('e2eTest', Test) {
+    group = 'verification'
+    description = 'Full Zero-to-HTTP-Response E2E (STORY-M1-10) - real Dispatcher/Runtime Worker/Gateway in-process, real Postgres/NATS/MinIO via testcontainers, real Node.js child process. Requires `node` on PATH and Docker.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'e2e'
+    }
 }
 
 springBoot {

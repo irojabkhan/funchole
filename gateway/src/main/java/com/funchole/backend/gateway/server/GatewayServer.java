@@ -7,6 +7,7 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
+import java.net.InetSocketAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +55,18 @@ public final class GatewayServer implements AutoCloseable {
         if (channel != null) {
             channel.closeFuture().sync();
         }
+    }
+
+    /**
+     * The actual bound port - needed by a caller that started this server
+     * with {@code port == 0} (OS-assigned ephemeral port), e.g. a test that
+     * cannot know the port in advance and must dial it after {@link #start()}.
+     */
+    public int boundPort() {
+        if (channel == null) {
+            throw new IllegalStateException("Gateway server is not started");
+        }
+        return ((InetSocketAddress) channel.localAddress()).getPort();
     }
 
     @Override
