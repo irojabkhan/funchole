@@ -20,6 +20,15 @@ dependencies {
     // classpath for Spring to find and wire it at startup, but only at
     // runtime - controlplane's own code never compiles against it.
     runtimeOnly project(':invocation')
+    // Same reasoning, for the dispatcher module's InvocationInspectionHandoff
+    // implementation (see InvocationInspectionHandoffConfig) - step-level
+    // inspection detail is dispatcher-owned data. slf4j-simple is excluded
+    // because dispatcher runs standalone with it as its own SLF4J binding,
+    // which would otherwise compete with controlplane's own log4j2 binding
+    // on this module's runtime classpath.
+    runtimeOnly(project(':dispatcher')) {
+        exclude group: 'org.slf4j', module: 'slf4j-simple'
+    }
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'

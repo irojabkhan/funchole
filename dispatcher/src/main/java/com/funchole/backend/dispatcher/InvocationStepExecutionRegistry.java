@@ -1,5 +1,6 @@
 package com.funchole.backend.dispatcher;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -23,4 +24,11 @@ public interface InvocationStepExecutionRegistry {
     InvocationStepExecutionTransition markCompleted(UUID executionId, RuntimeExecutionResult result);
 
     InvocationStepExecutionTransition markFailed(UUID executionId, RuntimeExecutionResult result);
+
+    /**
+     * All durable executions recorded for one invocation, ordered by
+     * position then attempt (ascending), for inspection/debugging - never
+     * used by the dispatch path itself.
+     */
+    List<InvocationStepExecution> findAllByInvocationId(UUID invocationId);
 }

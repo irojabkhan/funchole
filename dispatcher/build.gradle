@@ -12,6 +12,11 @@ dependencies {
     implementation "io.nats:jnats:${natsVersion}"
     implementation 'org.postgresql:postgresql'
     implementation 'org.slf4j:slf4j-simple'
+    // Only for @Configuration/@Bean wiring of InvocationInspectionHandoff
+    // (see InvocationInspectionHandoffConfig) - not a full Spring Boot
+    // dependency, mirroring the exact same narrow use already established
+    // in the invocation module's InvocationHandoffConfig.
+    implementation 'org.springframework:spring-context'
 
     testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
     testImplementation "org.testcontainers:testcontainers-junit-jupiter:${testcontainersVersion}"

@@ -7,7 +7,11 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Registers the concrete Invocation-side implementation of
- * {@link FunctionVersionInvocationHandoff} as a Spring bean. This class lives
+ * {@link FunctionVersionInvocationHandoff} as a Spring bean, and separately
+ * exposes {@link InvocationInspectionService} itself as a bean so the
+ * dispatcher module's own inspection config (which adds step-level detail on
+ * top) can inject it without either module compiling against the other's
+ * internals. This class lives
  * in the {@code invocation} module - not controlplane - so controlplane
  * never needs to import {@link InvocationRegistry}, {@link JdbcInvocationRegistry},
  * or {@link Invocation} to obtain a working handoff: it only ever sees the
@@ -34,5 +38,10 @@ public class InvocationHandoffConfig {
     @Bean
     FunctionVersionInvocationHandoff functionVersionInvocationHandoff(InvocationRegistry invocationRegistry) {
         return new InvocationRegistryFunctionVersionInvocationHandoff(invocationRegistry);
+    }
+
+    @Bean
+    InvocationInspectionService invocationInspectionService(InvocationRegistry invocationRegistry) {
+        return new InvocationInspectionService(invocationRegistry);
     }
 }

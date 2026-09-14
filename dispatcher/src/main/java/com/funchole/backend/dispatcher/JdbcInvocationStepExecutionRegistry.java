@@ -6,6 +6,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -156,6 +158,31 @@ public final class JdbcInvocationStepExecutionRegistry implements InvocationStep
             return findById(connection, executionId);
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to find step execution: " + executionId, exception);
+        }
+    }
+
+    @Override
+    public List<InvocationStepExecution> findAllByInvocationId(UUID invocationId) {
+        try (
+                Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement("""
+                        select
+                        """ + SELECT_COLUMNS + """
+                        from invocation_step_executions
+                        where invocation_id = ?
+                        order by position asc, attempt asc
+                        """)
+        ) {
+            statement.setObject(1, invocationId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<InvocationStepExecution> executions = new ArrayList<>();
+                while (resultSet.next()) {
+                    executions.add(toStepExecution(resultSet));
+                }
+                return executions;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to find step executions for invocation: " + invocationId, exception);
         }
     }
 

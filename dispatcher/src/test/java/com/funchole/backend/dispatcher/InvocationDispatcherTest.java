@@ -1243,6 +1243,11 @@ class InvocationDispatcherTest {
         public InvocationStepExecutionTransition markFailed(UUID executionId, RuntimeExecutionResult result) {
             throw new UnsupportedOperationException("not used");
         }
+
+        @Override
+        public java.util.List<InvocationStepExecution> findAllByInvocationId(UUID invocationId) {
+            throw new UnsupportedOperationException("not used");
+        }
     }
 
     private static final class TerminalFailingInvocationStepExecutionRegistry implements InvocationStepExecutionRegistry {
@@ -1278,6 +1283,11 @@ class InvocationDispatcherTest {
         public InvocationStepExecutionTransition markFailed(UUID executionId, RuntimeExecutionResult result) {
             terminalAttemptCount.incrementAndGet();
             throw new IllegalStateException("Simulated terminal persistence failure");
+        }
+
+        @Override
+        public java.util.List<InvocationStepExecution> findAllByInvocationId(UUID invocationId) {
+            return delegate.findAllByInvocationId(invocationId);
         }
     }
 
@@ -1360,6 +1370,11 @@ class InvocationDispatcherTest {
         public InvocationStepExecutionTransition markFailed(UUID executionId, RuntimeExecutionResult result) {
             terminalThreadName = Thread.currentThread().getName();
             return delegate.markFailed(executionId, result);
+        }
+
+        @Override
+        public java.util.List<InvocationStepExecution> findAllByInvocationId(UUID invocationId) {
+            return delegate.findAllByInvocationId(invocationId);
         }
     }
 
