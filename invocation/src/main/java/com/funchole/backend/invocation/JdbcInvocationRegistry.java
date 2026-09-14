@@ -107,14 +107,16 @@ public final class JdbcInvocationRegistry implements InvocationRegistry {
      * componentVersionId (the pinned FunctionVersion.id) was executed.
      */
     private InvocationSnapshot directInvocationSnapshot(DirectInvocationRequest request) {
+        UUID stepId = UUID.randomUUID();
         InvocationStepSnapshot invokeFunctionStep = new InvocationStepSnapshot(
-                UUID.randomUUID(),
+                stepId,
                 DIRECT_INVOCATION_STEP_KEY,
                 "FUNCTION",
                 1,
                 request.functionId(),
                 request.functionVersionId(),
-                null
+                null,
+                stepId
         );
         InvocationFlowSnapshot directFlow = new InvocationFlowSnapshot(
                 request.functionId(),
@@ -355,45 +357,107 @@ public final class JdbcInvocationRegistry implements InvocationRegistry {
         }
     }
 
+    /**
+     * SUB_FLOW steps are resolved by flattening, not by carrying every
+     * nested flow as a separate {@link InvocationFlowSnapshot}: each
+     * SUB_FLOW step is replaced in place by its referenced flow's own
+     * (recursively flattened) steps, so the Dispatcher's ExecutionPlanner -
+     * which only ever looks at the root flow's step list - needs no changes
+     * at all to execute a sub-flow's steps. The resulting snapshot always
+     * carries exactly one {@link InvocationFlowSnapshot} (the root).
+     */
     private InvocationSnapshot resolveSnapshot(Connection connection, CreateInvocationRequest request) {
         ArrayDeque<UUID> resolutionStack = new ArrayDeque<>();
-        List<InvocationFlowSnapshot> flows = new ArrayList<>();
-        resolveFlowVersion(connection, request.flowId(), request.flowVersionId(), resolutionStack, flows);
-        return new InvocationSnapshot(request.flowId(), request.flowKey(), request.flowVersionId(), List.copyOf(flows));
+        FlowVersionRecord rootFlowVersion = loadFlowVersion(connection, request.flowId(), request.flowVersionId());
+        List<InvocationStepSnapshot> flattenedSteps = new ArrayList<>();
+        resolveFlattenedSteps(connection, request.flowId(), request.flowVersionId(), resolutionStack, flattenedSteps, true);
+
+        InvocationFlowSnapshot rootFlow = new InvocationFlowSnapshot(
+                rootFlowVersion.flowId(),
+                rootFlowVersion.flowKey(),
+                rootFlowVersion.flowVersionId(),
+                rootFlowVersion.version(),
+                rootFlowVersion.status(),
+                rootFlowVersion.runtime(),
+                rootFlowVersion.metadata(),
+                renumberPositions(flattenedSteps)
+        );
+        return new InvocationSnapshot(request.flowId(), request.flowKey(), request.flowVersionId(), List.of(rootFlow));
     }
 
-    private void resolveFlowVersion(
+    /**
+     * Depth-first walk that appends every non-SUB_FLOW step (root-level or
+     * pulled in from a nested flow) into {@code out}, in execution order.
+     * Steps taken directly from the root flow keep their real
+     * {@code FlowStep.id} as {@code stepId}; steps pulled in from a nested
+     * flow get a freshly synthesized {@code stepId} (safe: the snapshot is
+     * built once and persisted immutably) so the same sub-flow referenced
+     * more than once can never collide on step identity. Either way,
+     * {@code sourceStepId} always preserves the real originating
+     * {@code FlowStep.id} for traceability. Positions are meaningless here -
+     * {@link #renumberPositions} fixes them up once the whole walk is done.
+     */
+    private void resolveFlattenedSteps(
             Connection connection,
             UUID flowId,
             UUID flowVersionId,
             ArrayDeque<UUID> resolutionStack,
-            List<InvocationFlowSnapshot> flows
+            List<InvocationStepSnapshot> out,
+            boolean isRoot
     ) {
         if (resolutionStack.contains(flowVersionId)) {
             throw new DependencyGraphResolutionException("Circular sub-flow dependency detected at flow version " + flowVersionId);
         }
 
         resolutionStack.push(flowVersionId);
-        FlowVersionRecord flowVersion = loadFlowVersion(connection, flowId, flowVersionId);
-        List<InvocationStepSnapshot> steps = loadSteps(connection, flowVersionId);
-        flows.add(new InvocationFlowSnapshot(
-                flowVersion.flowId(),
-                flowVersion.flowKey(),
-                flowVersion.flowVersionId(),
-                flowVersion.version(),
-                flowVersion.status(),
-                flowVersion.runtime(),
-                flowVersion.metadata(),
-                steps
-        ));
-
-        for (InvocationStepSnapshot step : steps) {
-            if ("SUB_FLOW".equalsIgnoreCase(step.componentType())) {
-                resolveFlowVersion(connection, step.componentId(), step.componentVersionId(), resolutionStack, flows);
+        try {
+            if (!isRoot) {
+                // The root flow version's existence is already validated by
+                // resolveSnapshot's own loadFlowVersion call; a nested
+                // SUB_FLOW reference gets no such check anywhere else, and
+                // loadSteps alone would silently return an empty list for a
+                // nonexistent flow version rather than failing clearly.
+                loadFlowVersion(connection, flowId, flowVersionId);
             }
+            List<InvocationStepSnapshot> steps = loadSteps(connection, flowVersionId);
+            for (InvocationStepSnapshot step : steps) {
+                if ("SUB_FLOW".equalsIgnoreCase(step.componentType())) {
+                    resolveFlattenedSteps(connection, step.componentId(), step.componentVersionId(), resolutionStack, out, false);
+                } else {
+                    UUID stepId = isRoot ? step.stepId() : UUID.randomUUID();
+                    out.add(new InvocationStepSnapshot(
+                            stepId,
+                            step.stepKey(),
+                            step.componentType(),
+                            step.position(),
+                            step.componentId(),
+                            step.componentVersionId(),
+                            step.metadata(),
+                            step.sourceStepId()
+                    ));
+                }
+            }
+        } finally {
+            resolutionStack.pop();
         }
+    }
 
-        resolutionStack.pop();
+    private List<InvocationStepSnapshot> renumberPositions(List<InvocationStepSnapshot> steps) {
+        List<InvocationStepSnapshot> renumbered = new ArrayList<>(steps.size());
+        int position = 1;
+        for (InvocationStepSnapshot step : steps) {
+            renumbered.add(new InvocationStepSnapshot(
+                    step.stepId(),
+                    step.stepKey(),
+                    step.componentType(),
+                    position++,
+                    step.componentId(),
+                    step.componentVersionId(),
+                    step.metadata(),
+                    step.sourceStepId()
+            ));
+        }
+        return renumbered;
     }
 
     private FlowVersionRecord loadFlowVersion(Connection connection, UUID flowId, UUID flowVersionId) {
@@ -443,14 +507,16 @@ public final class JdbcInvocationRegistry implements InvocationRegistry {
             try (ResultSet resultSet = statement.executeQuery()) {
                 List<InvocationStepSnapshot> steps = new ArrayList<>();
                 while (resultSet.next()) {
+                    UUID stepId = resultSet.getObject("id", UUID.class);
                     steps.add(new InvocationStepSnapshot(
-                            resultSet.getObject("id", UUID.class),
+                            stepId,
                             resultSet.getString("step_key"),
                             resultSet.getString("component_type"),
                             resultSet.getInt("position"),
                             resultSet.getObject("component_id", UUID.class),
                             resultSet.getObject("component_version_id", UUID.class),
-                            resultSet.getString("metadata")
+                            resultSet.getString("metadata"),
+                            stepId
                     ));
                 }
                 return List.copyOf(steps);

@@ -163,7 +163,8 @@ class InvocationSnapshotValidatorTest {
                 position,
                 componentId,
                 componentVersionId,
-                "{\"name\":\"" + stepKey + "\"}"
+                "{\"name\":\"" + stepKey + "\"}",
+                stepId
         );
     }
 }

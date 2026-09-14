@@ -179,6 +179,54 @@ class RuntimeWorkerServerTest {
     }
 
     @Test
+    void executesARealResponseComponentTypeJustLikeFunction() throws Exception {
+        UUID componentId = UUID.randomUUID();
+        UUID componentVersionId = writeSuccessArtifact();
+        UUID executionId = UUID.randomUUID();
+
+        try (TestClient client = TestClient.connect(socketPath)) {
+            client.sendInvoke(executionId, "RESPONSE", "NODE", componentId, componentVersionId, "{\"path\":\"/orders\"}");
+            client.readLine();
+            RuntimeTerminalMessage result = OBJECT_MAPPER.readValue(client.readLine(), RuntimeTerminalMessage.class);
+
+            assertEquals("RESULT", result.type());
+            assertEquals("{\"ok\":true,\"input\":{\"path\":\"/orders\"}}", result.output());
+        }
+    }
+
+    @Test
+    void executesARealMiddlewareComponentTypeJustLikeFunction() throws Exception {
+        UUID componentId = UUID.randomUUID();
+        UUID componentVersionId = writeSuccessArtifact();
+        UUID executionId = UUID.randomUUID();
+
+        try (TestClient client = TestClient.connect(socketPath)) {
+            client.sendInvoke(executionId, "MIDDLEWARE", "NODE", componentId, componentVersionId, "{\"path\":\"/orders\"}");
+            client.readLine();
+            RuntimeTerminalMessage result = OBJECT_MAPPER.readValue(client.readLine(), RuntimeTerminalMessage.class);
+
+            assertEquals("RESULT", result.type());
+            assertEquals("{\"ok\":true,\"input\":{\"path\":\"/orders\"}}", result.output());
+        }
+    }
+
+    @Test
+    void stillRejectsAGenuinelyUnsupportedComponentType() throws Exception {
+        UUID componentId = UUID.randomUUID();
+        UUID componentVersionId = writeSuccessArtifact();
+        UUID executionId = UUID.randomUUID();
+
+        try (TestClient client = TestClient.connect(socketPath)) {
+            client.sendInvoke(executionId, "MAPPING", "NODE", componentId, componentVersionId, "{}");
+            client.readLine();
+            RuntimeTerminalMessage error = OBJECT_MAPPER.readValue(client.readLine(), RuntimeTerminalMessage.class);
+
+            assertEquals("ERROR", error.type());
+            assertEquals("UNSUPPORTED_COMPONENT_TYPE", error.error().code());
+        }
+    }
+
+    @Test
     void deduplicatesRepeatedExecutionIdWhileExecutingAndInvokesHandlerExactlyOnce() throws Exception {
         UUID componentId = UUID.randomUUID();
         UUID componentVersionId = writeSlowCountingArtifact();
@@ -372,12 +420,20 @@ class RuntimeWorkerServerTest {
         }
 
         void sendInvoke(UUID executionId, String runtimeType, UUID componentId, UUID componentVersionId, String input) throws IOException {
+            sendInvoke(executionId, "FUNCTION", runtimeType, componentId, componentVersionId, input);
+        }
+
+        void sendInvoke(
+                UUID executionId, String componentType, String runtimeType, UUID componentId, UUID componentVersionId, String input
+        ) throws IOException {
             String escapedInput = input.replace("\\", "\\\\").replace("\"", "\\\"");
             String json = """
                     {"type":"INVOKE","executionId":"%s","payload":{"invocationId":"%s","flowId":null,"flowVersionId":null,\
-                    "stepId":"%s","attempt":1,"componentType":"FUNCTION","componentId":"%s","componentVersionId":"%s",\
+                    "stepId":"%s","attempt":1,"componentType":"%s","componentId":"%s","componentVersionId":"%s",\
                     "runtimeType":"%s","input":"%s"}}
-                    """.formatted(executionId, UUID.randomUUID(), UUID.randomUUID(), componentId, componentVersionId, runtimeType, escapedInput);
+                    """.formatted(
+                    executionId, UUID.randomUUID(), UUID.randomUUID(), componentType, componentId, componentVersionId,
+                    runtimeType, escapedInput);
             sendRaw(json.strip());
         }
 

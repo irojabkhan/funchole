@@ -12,6 +12,19 @@
 #   2. Fetch Orders
 #   3. Build Orders Response
 #
+# CAVEAT (since STORY-M1-06): RESPONSE steps now execute real code on the
+# Runtime Worker, the same as FUNCTION steps - there is no more inline,
+# metadata-only response synthesis. Step 3 above ("Build Orders Response")
+# is seeded here with a placeholder component_id/component_version_id that
+# is NOT a real Function/FunctionVersion, so on a fresh volume it will 404
+# with ARTIFACT_NOT_FOUND until a real Function is created and deployed via
+# the Controlplane API and this script's seeded flow_steps row for
+# step_key='build-orders-response' is UPDATEd to point at it (see git log
+# for the one-off fix applied to the shared dev DB on 2026-09-14, function
+# key fn_orders_response_seed). Steps 1-2 are unaffected - their fake
+# artifacts are still pre-seeded into RustFS by the rustfs-init service
+# from runtime/artifacts/dev/.
+#
 # Runs psql inside the dev DB container so no local psql client is required.
 #
 # Usage:

@@ -1,9 +1,7 @@
 package com.funchole.backend.dispatcher;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.funchole.backend.invocation.Invocation;
 import com.funchole.backend.invocation.InvocationKind;
 import com.funchole.backend.invocation.InvocationMessagingConfig;
@@ -40,15 +38,6 @@ import org.slf4j.LoggerFactory;
 public final class InvocationDispatcher {
     private static final Logger logger = LoggerFactory.getLogger(InvocationDispatcher.class);
     private static final String RESPONSE_COMPONENT_TYPE = "RESPONSE";
-
-    /**
-     * Sentinel runtime-instance identity recorded for steps executed inline
-     * by the Dispatcher's own orchestration layer (currently only RESPONSE)
-     * rather than handed off to a real runtime. Keeps the existing
-     * READY -&gt; RUNNING -&gt; COMPLETED step-execution lifecycle uniform without
-     * requiring a Runtime Registry reservation for these steps.
-     */
-    private static final String ORCHESTRATION_RUNTIME_INSTANCE_ID = "dispatcher-orchestration";
     private static final String RUNTIME_EXECUTION_FAILED_ERROR_CODE = "RUNTIME_EXECUTION_FAILED";
 
     private final Connection connection;
@@ -372,12 +361,14 @@ public final class InvocationDispatcher {
 
     /**
      * After a step completes durably, finds the next ordered step of the same
-     * flow from the frozen Invocation snapshot and either dispatches it (a
-     * FUNCTION step, through the Runtime Registry/IPC as usual) or executes
-     * it inline (a RESPONSE step), passing the previous step's stored result
-     * as input either way. Stops silently when there is no further
-     * progressable step - a flow that ends without a RESPONSE step leaves its
-     * Invocation PENDING, unchanged from the previous milestone.
+     * flow from the frozen Invocation snapshot and dispatches it through the
+     * Runtime Registry/IPC - FUNCTION, RESPONSE, and MIDDLEWARE all execute
+     * identically here; RESPONSE is distinguished only by
+     * {@link #onStepTerminal} treating its completion as the end of the whole
+     * invocation. Passes the previous step's stored result as input. Stops
+     * silently when there is no further progressable step - a flow that ends
+     * without a RESPONSE step leaves its Invocation PENDING, unchanged from
+     * the previous milestone.
      */
     private void planAndDispatchNextStep(InvocationStepExecution completedExecution) {
         Invocation invocation = invocationRegistry
@@ -435,66 +426,7 @@ public final class InvocationDispatcher {
                 nextExecution.status()
         );
 
-        if (isResponseStep(nextExecution)) {
-            executeResponseStep(nextExecution, completedExecution.result());
-        } else {
-            dispatchStepExecution(nextExecution, completedExecution.result());
-        }
-    }
-
-    /**
-     * Executes a RESPONSE step inline in the orchestration layer: no Runtime
-     * Registry reservation and no IPC round trip. The step still moves
-     * through the same READY -&gt; RUNNING -&gt; COMPLETED lifecycle as a FUNCTION
-     * step for consistency, using {@link #ORCHESTRATION_RUNTIME_INSTANCE_ID}
-     * as its recorded runtime instance.
-     */
-    private void executeResponseStep(InvocationStepExecution responseExecution, String previousResult) {
-        InvocationStepExecution running =
-                stepExecutionRegistry.markRunning(responseExecution.id(), ORCHESTRATION_RUNTIME_INSTANCE_ID);
-        logger.info(
-                "Response step running: executionId={}, invocationId={}, stepId={}",
-                running.id(), running.invocationId(), running.stepId()
-        );
-
-        RuntimeExecutionResult result;
-        try {
-            result = RuntimeExecutionResult.success(running.id(), buildResponseOutput(previousResult));
-        } catch (RuntimeException exception) {
-            result = RuntimeExecutionResult.failure(
-                    running.id(), new RuntimeExecutionError("RESPONSE_BUILD_ERROR", exception.getMessage()));
-        }
-
-        try {
-            InvocationStepExecutionTransition transition = persistStepTerminal(result);
-            logStepTerminal(transition, result, ORCHESTRATION_RUNTIME_INSTANCE_ID);
-            if (transition.transitioned()) {
-                onStepTerminal(transition.execution());
-            }
-        } catch (RuntimeException exception) {
-            logger.warn(
-                    "Response step terminal persistence failed: executionId={}, message={}",
-                    running.id(), exception.getMessage()
-            );
-        }
-    }
-
-    /**
-     * The first RESPONSE contract for this milestone: {"status": 200, "body":
-     * &lt;previous step result&gt;}. No headers/templates/mapping DSL yet.
-     */
-    private String buildResponseOutput(String previousResult) {
-        try {
-            JsonNode bodyNode = previousResult == null
-                    ? objectMapper.nullNode()
-                    : objectMapper.readTree(previousResult);
-            ObjectNode response = objectMapper.createObjectNode();
-            response.put("status", 200);
-            response.set("body", bodyNode);
-            return objectMapper.writeValueAsString(response);
-        } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Failed to build RESPONSE output from previous step result", exception);
-        }
+        dispatchStepExecution(nextExecution, completedExecution.result());
     }
 
     private void completeInvocation(InvocationStepExecution responseExecution) {

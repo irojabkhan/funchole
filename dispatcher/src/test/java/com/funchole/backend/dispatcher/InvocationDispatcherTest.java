@@ -325,8 +325,12 @@ class InvocationDispatcherTest {
 
         // Full synchronous flow: FUNCTION step 2 is dispatched and completed
         // with the first step's result as its input, then the RESPONSE step
-        // at position 3 executes inline (no runtime capacity) and the
-        // Invocation reaches COMPLETED with the RESPONSE step's output.
+        // at position 3 is dispatched through the exact same Runtime
+        // Registry/IPC path as FUNCTION (no more inline execution) and the
+        // Invocation reaches COMPLETED with the RESPONSE step's own output,
+        // unwrapped - the Dispatcher no longer synthesizes a {status,body}
+        // shape itself, a real RESPONSE function's code is responsible for
+        // returning one.
         awaitCondition(() -> runtimeRegistry.find(DEV_RUNTIME_INSTANCE_ID).orElseThrow().inFlight() == 0, Duration.ofSeconds(5));
         awaitCondition(() -> countStepExecutionsUnchecked() == 3, Duration.ofSeconds(5));
         assertEquals(3, countStepExecutions());
@@ -340,15 +344,10 @@ class InvocationDispatcherTest {
         assertEquals(InvocationStatus.COMPLETED, completedInvocation.status());
         assertNotNull(completedInvocation.completedAt());
 
-        InvocationStepExecution secondExecution = stepExecutionAtPosition(flowVersionId, 2).orElseThrow();
         InvocationStepExecution responseExecution = stepExecutionAtPosition(flowVersionId, 3).orElseThrow();
         assertEquals(InvocationStepExecutionStatus.COMPLETED, responseExecution.status());
         assertEquals("RESPONSE", responseExecution.componentType());
         assertJsonEquals(responseExecution.result(), completedInvocation.result());
-
-        JsonNode responseNode = OBJECT_MAPPER.readTree(completedInvocation.result());
-        assertEquals(200, responseNode.at("/status").asInt());
-        assertJsonEquals(secondExecution.result(), OBJECT_MAPPER.writeValueAsString(responseNode.at("/body")));
     }
 
     @Test
@@ -414,18 +413,18 @@ class InvocationDispatcherTest {
     void doesNotAckWhenFirstStepIsNotExecutable() throws Exception {
         UUID flowId = UUID.fromString("10000000-0000-0000-0000-000000000131");
         UUID flowVersionId = UUID.fromString("20000000-0000-0000-0000-000000000131");
-        insertFlow(flowId, "flw_middleware_first", flowVersionId, 1);
+        insertFlow(flowId, "flw_mapping_first", flowVersionId, 1);
         insertStep(
                 flowVersionId,
-                "log-request",
-                "MIDDLEWARE",
+                "map-request",
+                "MAPPING",
                 1,
                 UUID.fromString("30000000-0000-0000-0000-000000000131"),
                 UUID.fromString("40000000-0000-0000-0000-000000000131")
         );
         Invocation invocation = invocationRegistry.create(new CreateInvocationRequest(
                 flowId,
-                "flw_middleware_first",
+                "flw_mapping_first",
                 flowVersionId,
                 "{\"path\":\"/orders\"}"
         ));
@@ -511,7 +510,9 @@ class InvocationDispatcherTest {
                 Duration.ofSeconds(5));
 
         var requests = gateway.requests();
-        assertEquals(2, requests.size());
+        // FUNCTION (pos 1), FUNCTION (pos 2), and RESPONSE (pos 3) all go
+        // through the same gateway now - RESPONSE no longer executes inline.
+        assertEquals(3, requests.size());
         RuntimeExecutionRequest secondRequest = requests.get(1);
         assertEquals(secondComponentVersionId, secondRequest.componentVersionId());
         assertEquals(secondComponentId, secondRequest.componentId());
@@ -603,7 +604,7 @@ class InvocationDispatcherTest {
     }
 
     @Test
-    void responseStepDoesNotReserveRuntimeCapacity() throws Exception {
+    void responseStepReservesAndReleasesRuntimeCapacityJustLikeFunction() throws Exception {
         UUID flowId = UUID.fromString("10000000-0000-0000-0000-000000000281");
         UUID flowVersionId = UUID.fromString("20000000-0000-0000-0000-000000000281");
         insertFlow(flowId, "flw_orders_list", flowVersionId, 1);
@@ -628,10 +629,10 @@ class InvocationDispatcherTest {
                 Duration.ofSeconds(5)
         );
         assertEquals(2, countStepExecutions());
-        // Exactly one reservation: the FUNCTION step. The RESPONSE step that
-        // followed and completed the Invocation never touched the registry.
-        assertEquals(1, countingRuntimeRegistry.selectAndReserveCallCount());
-        assertEquals(1, countingRuntimeRegistry.releaseCallCount());
+        // RESPONSE dispatches through the exact same Runtime Registry/IPC
+        // path as FUNCTION now - both steps reserve and release capacity.
+        assertEquals(2, countingRuntimeRegistry.selectAndReserveCallCount());
+        assertEquals(2, countingRuntimeRegistry.releaseCallCount());
     }
 
     @Test
@@ -742,7 +743,7 @@ class InvocationDispatcherTest {
         insertStep(flowVersionId, "validate-orders-request", "FUNCTION", 100,
                 UUID.fromString("30000000-0000-0000-0000-000000000291"),
                 UUID.fromString("40000000-0000-0000-0000-000000000291"));
-        insertStep(flowVersionId, "log-request", "MIDDLEWARE", 101,
+        insertStep(flowVersionId, "map-request", "MAPPING", 101,
                 UUID.fromString("30000000-0000-0000-0000-000000000292"),
                 UUID.fromString("40000000-0000-0000-0000-000000000292"));
         Invocation invocation = invocationRegistry.create(new CreateInvocationRequest(

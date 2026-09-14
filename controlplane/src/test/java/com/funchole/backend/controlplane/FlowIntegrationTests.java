@@ -1,6 +1,7 @@
 package com.funchole.backend.controlplane;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -14,13 +15,18 @@ import com.funchole.backend.controlplane.repository.AppDomainRepository;
 import com.funchole.backend.controlplane.repository.AppUserRepository;
 import com.funchole.backend.controlplane.repository.GatewayRepository;
 import com.jayway.jsonpath.JsonPath;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -62,12 +68,14 @@ class FlowIntegrationTests {
     @Test
     void fullLifecycleFromDraftToAdoptToArchive() throws Exception {
         String flowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        ReadyFunctionVersion functionOne = createReadyFunctionVersion();
+        ReadyFunctionVersion functionTwo = createReadyFunctionVersion();
 
         String flowId = createFlow(flowKey);
         String versionId = createDraftVersion(flowId);
 
-        createStep(flowId, versionId, "step-one", "FUNCTION", 10);
-        createStep(flowId, versionId, "step-two", "RESPONSE", 20);
+        createStep(flowId, versionId, "step-one", "FUNCTION", 10, functionOne);
+        createStep(flowId, versionId, "step-two", "RESPONSE", 20, functionTwo);
 
         mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/adopt", flowId, versionId)
                         .header("Authorization", "Bearer " + adminToken))
@@ -84,7 +92,7 @@ class FlowIntegrationTests {
         mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/steps", flowId, versionId)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(stepPayload("step-three", "FUNCTION", 30)))
+                        .content(stepPayload("step-three", "FUNCTION", 30, functionOne.functionId(), functionOne.functionVersionId())))
                 .andExpect(status().is4xxClientError());
 
         mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/archive", flowId, versionId)
@@ -115,10 +123,36 @@ class FlowIntegrationTests {
         String flowId = createFlow(flowKey);
         String versionId = createDraftVersion(flowId);
 
+        // MAPPING is not in FlowStepComponentType at all yet - rejected by
+        // Jackson enum deserialization before component validation ever runs.
         mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/steps", flowId, versionId)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(stepPayload("bad-step", "MIDDLEWARE", 10)))
+                        .content("""
+                                {
+                                  "stepKey": "bad-step",
+                                  "componentType": "MAPPING",
+                                  "position": 10,
+                                  "componentId": "%s",
+                                  "componentVersionId": "%s"
+                                }
+                                """.formatted(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void rejectsStepReferencingAFunctionVersionThatIsNotReady() throws Exception {
+        String flowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        String flowId = createFlow(flowKey);
+        String versionId = createDraftVersion(flowId);
+
+        String functionId = createFunction();
+        String functionVersionId = createDraftFunctionVersion(functionId);
+
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/steps", flowId, versionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stepPayload("step-one", "FUNCTION", 10, functionId, functionVersionId)))
                 .andExpect(status().is4xxClientError());
     }
 
@@ -169,16 +203,18 @@ class FlowIntegrationTests {
         return JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
     }
 
-    private void createStep(String flowId, String versionId, String stepKey, String componentType, int position) throws Exception {
+    private void createStep(
+            String flowId, String versionId, String stepKey, String componentType, int position, ReadyFunctionVersion function
+    ) throws Exception {
         mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/steps", flowId, versionId)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(stepPayload(stepKey, componentType, position)))
+                        .content(stepPayload(stepKey, componentType, position, function.functionId(), function.functionVersionId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.stepKey").value(stepKey));
     }
 
-    private String stepPayload(String stepKey, String componentType, int position) {
+    private String stepPayload(String stepKey, String componentType, int position, String componentId, String componentVersionId) {
         return """
                 {
                   "stepKey": "%s",
@@ -187,7 +223,69 @@ class FlowIntegrationTests {
                   "componentId": "%s",
                   "componentVersionId": "%s"
                 }
-                """.formatted(stepKey, componentType, position, UUID.randomUUID(), UUID.randomUUID());
+                """.formatted(stepKey, componentType, position, componentId, componentVersionId);
+    }
+
+    private record ReadyFunctionVersion(String functionId, String functionVersionId) {
+    }
+
+    /**
+     * Full real pipeline: create Function -&gt; create draft FunctionVersion ->
+     * submit a dependency-free zip source -&gt; deploy to READY - so Flow steps
+     * in these tests reference a real, existing, READY FunctionVersion rather
+     * than an arbitrary UUID, matching what FlowStepService now requires.
+     */
+    private ReadyFunctionVersion createReadyFunctionVersion() throws Exception {
+        String functionId = createFunction();
+        String functionVersionId = createDraftFunctionVersion(functionId);
+
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
+            zip.putNextEntry(new ZipEntry("index.mjs"));
+            zip.write("export async function handler(input) { return input; }".getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        MockMultipartFile archive = new MockMultipartFile("file", "source.zip", "application/zip", buffer.toByteArray());
+
+        mockMvc.perform(multipart("/api/v1/functions/{functionId}/versions/{versionId}/source", functionId, functionVersionId)
+                        .file(archive)
+                        .param("entrypoint", "index.mjs")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/functions/{functionId}/versions/{versionId}/deploy", functionId, functionVersionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("READY"));
+
+        return new ReadyFunctionVersion(functionId, functionVersionId);
+    }
+
+    private String createFunction() throws Exception {
+        String functionKey = "fn_test_" + UUID.randomUUID().toString().replace("-", "");
+        MvcResult result = mockMvc.perform(post("/api/v1/functions")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "functionKey": "%s",
+                                  "name": "Test Function",
+                                  "runtime": "NODE"
+                                }
+                                """.formatted(functionKey)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
+    }
+
+    private String createDraftFunctionVersion(String functionId) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/functions/{functionId}/versions", functionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return JsonPath.read(result.getResponse().getContentAsString(), "$.data.id");
     }
 
     private String obtainToken(String username, String password) throws Exception {

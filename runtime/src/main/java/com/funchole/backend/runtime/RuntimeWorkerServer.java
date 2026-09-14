@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,9 +34,13 @@ import org.slf4j.LoggerFactory;
  * before writing the real RESULT or ERROR.
  *
  * This is not a generic Function execution engine: for this milestone it
- * only supports {@code runtimeType=NODE} and {@code componentType=FUNCTION}.
- * It never queries the FuncHole database and never consumes JetStream - the
- * Dispatcher remains the sole global coordinator.
+ * only supports {@code runtimeType=NODE} and {@code componentType} in
+ * {@link #SUPPORTED_COMPONENT_TYPES} - FUNCTION, RESPONSE, and MIDDLEWARE all
+ * execute identically here (resolve artifact by componentId/componentVersionId,
+ * invoke its handler); the Dispatcher alone decides what a step's completion
+ * means (e.g. RESPONSE ending the whole invocation). It never queries the
+ * FuncHole database and never consumes JetStream - the Dispatcher remains the
+ * sole global coordinator.
  *
  * Idempotency is in-memory and per-process only; a worker restart loses all
  * dedup state (documented limitation).
@@ -43,7 +48,7 @@ import org.slf4j.LoggerFactory;
 public final class RuntimeWorkerServer implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(RuntimeWorkerServer.class);
-    private static final String SUPPORTED_COMPONENT_TYPE = "FUNCTION";
+    private static final Set<String> SUPPORTED_COMPONENT_TYPES = Set.of("FUNCTION", "RESPONSE", "MIDDLEWARE");
 
     private final ServerSocketChannel serverChannel;
     private final Path socketPath;
@@ -253,11 +258,12 @@ public final class RuntimeWorkerServer implements AutoCloseable {
         RuntimeInvokeMessage message = state.message();
         RuntimeInvokePayload payload = message.payload();
 
-        if (!SUPPORTED_COMPONENT_TYPE.equalsIgnoreCase(payload.componentType())) {
+        String componentType = payload.componentType() == null ? "" : payload.componentType().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_COMPONENT_TYPES.contains(componentType)) {
             distributeTerminal(state, RuntimeTerminalMessage.error(
                     message.executionId(),
                     "UNSUPPORTED_COMPONENT_TYPE",
-                    "Runtime Worker only executes " + runtimeType.toUpperCase(Locale.ROOT) + " " + SUPPORTED_COMPONENT_TYPE
+                    "Runtime Worker only executes " + runtimeType.toUpperCase(Locale.ROOT) + " " + SUPPORTED_COMPONENT_TYPES
                             + " components; got " + payload.componentType()
             ));
             return;

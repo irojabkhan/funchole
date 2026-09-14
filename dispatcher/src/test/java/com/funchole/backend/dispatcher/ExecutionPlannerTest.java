@@ -110,27 +110,29 @@ class ExecutionPlannerTest {
 
     @Test
     void failsClearlyForUnsupportedExecutableStepType() {
-        InvocationStepSnapshot middlewareStep = step(
-                "log-request", "MIDDLEWARE", 1,
+        InvocationStepSnapshot mappingStep = step(
+                "map-request", "MAPPING", 1,
                 "88888888-8888-8888-8888-888888888871", "99999999-9999-9999-9999-999999999871");
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
-                () -> planner.planInitialStep(invocation(), snapshot(List.of(middlewareStep))));
+                () -> planner.planInitialStep(invocation(), snapshot(List.of(mappingStep))));
 
-        assertTrue(exception.getMessage().contains("MIDDLEWARE"));
+        assertTrue(exception.getMessage().contains("MAPPING"));
         assertTrue(exception.getMessage().contains("not dispatchable"));
     }
 
     @Test
     void failsWhenComponentReferenceMissing() {
+        UUID incompleteStepId = UUID.fromString("a0000000-0000-0000-0000-000000000001");
         InvocationStepSnapshot incompleteStep = new InvocationStepSnapshot(
-                UUID.fromString("a0000000-0000-0000-0000-000000000001"),
+                incompleteStepId,
                 "validate-orders-request",
                 "FUNCTION",
                 1,
                 UUID.fromString("88888888-8888-8888-8888-888888888861"),
                 null,
-                null
+                null,
+                incompleteStepId
         );
 
         IllegalStateException exception = assertThrows(IllegalStateException.class,
@@ -181,14 +183,16 @@ class ExecutionPlannerTest {
             String componentId,
             String componentVersionId
     ) {
+        UUID stepId = UUID.randomUUID();
         return new InvocationStepSnapshot(
-                UUID.randomUUID(),
+                stepId,
                 stepKey,
                 componentType,
                 position,
                 UUID.fromString(componentId),
                 UUID.fromString(componentVersionId),
-                null
+                null,
+                stepId
         );
     }
 
@@ -250,10 +254,10 @@ class ExecutionPlannerTest {
     void stopsWhenNextOrderedStepIsAnUnsupportedComponentType() {
         InvocationStepSnapshot first = step("validate-orders-request", "FUNCTION", 1,
                 "88888888-8888-8888-8888-888888888861", "99999999-9999-9999-9999-999999999861");
-        InvocationStepSnapshot middleware = step("log-request", "MIDDLEWARE", 2,
+        InvocationStepSnapshot mapping = step("map-request", "MAPPING", 2,
                 "88888888-8888-8888-8888-888888888863", "99999999-9999-9999-9999-999999999863");
 
-        assertTrue(planner.planNextStep(invocation(), snapshot(List.of(first, middleware)), 1).isEmpty());
+        assertTrue(planner.planNextStep(invocation(), snapshot(List.of(first, mapping)), 1).isEmpty());
     }
 
     @Test
@@ -283,8 +287,9 @@ class ExecutionPlannerTest {
                 "88888888-8888-8888-8888-888888888861", "99999999-9999-9999-9999-999999999861");
         UUID secondComponentId = UUID.fromString("88888888-8888-8888-8888-888888888862");
         UUID secondComponentVersionId = UUID.fromString("99999999-9999-9999-9999-999999999862");
+        UUID secondStepId = UUID.randomUUID();
         InvocationStepSnapshot second = new InvocationStepSnapshot(
-                UUID.randomUUID(), "fetch-orders", "FUNCTION", 2, secondComponentId, secondComponentVersionId, null);
+                secondStepId, "fetch-orders", "FUNCTION", 2, secondComponentId, secondComponentVersionId, null, secondStepId);
 
         Optional<DispatchableStep> next =
                 planner.planNextStep(invocation(), snapshot(List.of(first, second)), 1);

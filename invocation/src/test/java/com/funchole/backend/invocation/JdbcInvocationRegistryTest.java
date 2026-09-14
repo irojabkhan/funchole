@@ -374,18 +374,38 @@ class JdbcInvocationRegistryTest {
         UUID functionId = UUID.fromString("30000000-0000-0000-0000-000000000024");
         UUID functionVersionId = UUID.fromString("40000000-0000-0000-0000-000000000024");
 
+        UUID subFlowStepId = UUID.fromString("50000000-0000-0000-0000-000000000021");
+        UUID chargeCardStepId = UUID.fromString("50000000-0000-0000-0000-000000000022");
+
         insertFlow(rootFlowId, "flw_root", rootVersionId, 3);
         insertFlow(subFlowId, "flw_payment", subVersionId, 2);
-        insertStep(rootVersionId, "payment-flow", "SUB_FLOW", 1, subFlowId, subVersionId);
-        insertStep(subVersionId, "charge-card", "FUNCTION", 1, functionId, functionVersionId);
+        insertStep(subFlowStepId, rootVersionId, "payment-flow", "SUB_FLOW", 1, subFlowId, subVersionId, null);
+        insertStep(chargeCardStepId, subVersionId, "charge-card", "FUNCTION", 1, functionId, functionVersionId, null);
 
         Invocation invocation = registry.create(new CreateInvocationRequest(rootFlowId, "flw_root", rootVersionId, "{}"));
         JsonNode snapshot = OBJECT_MAPPER.readTree(invocation.dependencySnapshot());
 
-        assertEquals(2, snapshot.get("flows").size());
+        // SUB_FLOW is resolved by flattening, not by carrying a second
+        // InvocationFlowSnapshot entry: the root's SUB_FLOW step is replaced
+        // in place by the sub-flow's own (here, single) step, so the
+        // Dispatcher's ExecutionPlanner - which only ever looks at the root
+        // flow - needs no awareness of SUB_FLOW at all.
+        assertEquals(1, snapshot.get("flows").size());
         assertEquals(rootVersionId.toString(), snapshot.at("/flows/0/flowVersionId").asText());
-        assertEquals(subVersionId.toString(), snapshot.at("/flows/1/flowVersionId").asText());
-        assertEquals(functionVersionId.toString(), snapshot.at("/flows/1/steps/0/componentVersionId").asText());
+        assertEquals(1, snapshot.at("/flows/0/steps").size());
+        assertEquals("FUNCTION", snapshot.at("/flows/0/steps/0/componentType").asText());
+        assertEquals(functionVersionId.toString(), snapshot.at("/flows/0/steps/0/componentVersionId").asText());
+        assertEquals(1, snapshot.at("/flows/0/steps/0/position").asInt());
+
+        // The flattened step keeps the sub-flow's real FlowStep.id as
+        // sourceStepId for traceability, but gets a freshly synthesized
+        // execution-scoped stepId (distinct from both the sub-flow step's own
+        // id and the SUB_FLOW step's id it replaced) so the same sub-flow
+        // referenced more than once can never collide on step identity.
+        assertEquals(chargeCardStepId.toString(), snapshot.at("/flows/0/steps/0/sourceStepId").asText());
+        String flattenedStepId = snapshot.at("/flows/0/steps/0/stepId").asText();
+        assertNotEquals(chargeCardStepId.toString(), flattenedStepId);
+        assertNotEquals(subFlowStepId.toString(), flattenedStepId);
     }
 
     @Test

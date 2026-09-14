@@ -25,17 +25,20 @@ import java.util.Set;
  */
 public class ExecutionPlanner {
 
-    private static final Set<String> EXECUTABLE_COMPONENT_TYPES = Set.of("FUNCTION");
+    private static final Set<String> EXECUTABLE_COMPONENT_TYPES = Set.of("FUNCTION", "RESPONSE", "MIDDLEWARE");
 
     /**
-     * Component types {@link #planNextStep} will progress into. FUNCTION
-     * steps run through the Runtime Registry/IPC; RESPONSE steps are executed
-     * inline by the Dispatcher's orchestration layer (see
-     * InvocationDispatcher) with no runtime involved. Other component types
-     * are not supported yet and, like an absent next step, simply stop
-     * progression.
+     * Component types {@link #planNextStep} will progress into. FUNCTION,
+     * RESPONSE, and MIDDLEWARE steps all run through the Runtime Registry/IPC
+     * identically - RESPONSE is distinguished only by
+     * InvocationDispatcher.onStepTerminal treating its completion as the end
+     * of the whole invocation, not by a different execution path. SUB_FLOW
+     * never appears here: it is resolved by flattening at snapshot-build time
+     * (see JdbcInvocationRegistry), so the planner never sees it. Other
+     * component types (MAPPING, LOGICAL) are not supported yet and, like an
+     * absent next step, simply stop progression.
      */
-    private static final Set<String> PROGRESSABLE_COMPONENT_TYPES = Set.of("FUNCTION", "RESPONSE");
+    private static final Set<String> PROGRESSABLE_COMPONENT_TYPES = Set.of("FUNCTION", "RESPONSE", "MIDDLEWARE");
 
     public DispatchableStep planInitialStep(Invocation invocation, InvocationSnapshot snapshot) {
         InvocationFlowSnapshot rootFlow = findRootFlow(snapshot);
@@ -100,8 +103,8 @@ public class ExecutionPlanner {
      * ordered step's component type is not one this milestone progresses
      * into (see {@link #PROGRESSABLE_COMPONENT_TYPES}) - both are legitimate
      * "flow progression stops here" outcomes, not planner failures. The
-     * caller (InvocationDispatcher) is responsible for routing a returned
-     * RESPONSE step to inline orchestration instead of the Runtime Registry.
+     * caller (InvocationDispatcher) is responsible for treating a returned
+     * RESPONSE step's completion as the end of the whole invocation.
      */
     public Optional<DispatchableStep> planNextStep(Invocation invocation, InvocationSnapshot snapshot, int completedPosition) {
         InvocationFlowSnapshot rootFlow = findRootFlow(snapshot);
