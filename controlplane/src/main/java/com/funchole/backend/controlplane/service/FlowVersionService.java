@@ -1,14 +1,18 @@
 package com.funchole.backend.controlplane.service;
 
+import com.funchole.backend.controlplane.constant.FlowStepComponentType;
 import com.funchole.backend.controlplane.constant.FlowVersionStatus;
 import com.funchole.backend.controlplane.dto.FlowVersionCreateRequest;
 import com.funchole.backend.controlplane.entity.Flow;
+import com.funchole.backend.controlplane.entity.FlowStep;
 import com.funchole.backend.controlplane.entity.FlowVersion;
 import com.funchole.backend.controlplane.repository.FlowRepository;
 import com.funchole.backend.controlplane.repository.FlowStepRepository;
 import com.funchole.backend.controlplane.repository.FlowVersionRepository;
 import com.funchole.backend.core.base.exception.ResourceNotFoundException;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -21,21 +25,27 @@ import org.springframework.transaction.annotation.Transactional;
 public class FlowVersionService {
     private static final String DEFAULT_RUNTIME = "NODE";
 
+    private static final Set<FlowStepComponentType> TERMINAL_COMPONENT_TYPES =
+            Set.of(FlowStepComponentType.RESPONSE, FlowStepComponentType.SUB_FLOW);
+
     private final FlowVersionRepository flowVersionRepository;
     private final FlowStepRepository flowStepRepository;
     private final FlowRepository flowRepository;
     private final FlowService flowService;
+    private final FlowStepReferenceValidator flowStepReferenceValidator;
 
     public FlowVersionService(
             FlowVersionRepository flowVersionRepository,
             FlowStepRepository flowStepRepository,
             FlowRepository flowRepository,
-            FlowService flowService
+            FlowService flowService,
+            FlowStepReferenceValidator flowStepReferenceValidator
     ) {
         this.flowVersionRepository = flowVersionRepository;
         this.flowStepRepository = flowStepRepository;
         this.flowRepository = flowRepository;
         this.flowService = flowService;
+        this.flowStepReferenceValidator = flowStepReferenceValidator;
     }
 
     public Page<FlowVersion> listVersions(UUID appUserId, UUID flowId, int page, int size) {
@@ -72,9 +82,11 @@ public class FlowVersionService {
         if (flowVersion.getStatus() != FlowVersionStatus.DRAFT) {
             throw new IllegalArgumentException("Only a DRAFT version can be adopted, current status: " + flowVersion.getStatus());
         }
-        if (!flowStepRepository.existsByFlowVersion_Id(versionId)) {
+        List<FlowStep> steps = flowStepRepository.findAllByFlowVersion_IdOrderByPosition(versionId);
+        if (steps.isEmpty()) {
             throw new IllegalArgumentException("Cannot adopt a flow version with no steps");
         }
+        validateStepsForAdoption(appUserId, steps);
 
         Optional<FlowVersion> currentlyAdopted = flowVersionRepository.findByFlow_IdAndStatus(flowId, FlowVersionStatus.ADOPTED);
         currentlyAdopted.ifPresent(previous -> {
@@ -89,6 +101,40 @@ public class FlowVersionService {
         flowRepository.save(flow);
 
         return savedVersion;
+    }
+
+    /**
+     * Re-checks every step's component reference (a step's Function/FunctionVersion
+     * or referenced Flow/FlowVersion can drift - e.g. soft-deleted - between
+     * authoring and adoption), and enforces that positions are strictly
+     * ascending and the last step is RESPONSE or SUB_FLOW - the only two
+     * component types whose completion can end an invocation. Without this,
+     * a flow that runs out of steps without ever completing a RESPONSE
+     * leaves its Invocation stuck PENDING forever (see GAP-08). A SUB_FLOW
+     * last step is sound by induction: it can only reference an ADOPTED
+     * FlowVersion, which was itself already required to end this same way
+     * when it was adopted.
+     */
+    private void validateStepsForAdoption(UUID appUserId, List<FlowStep> steps) {
+        int previousPosition = 0;
+        for (FlowStep step : steps) {
+            if (step.getPosition() <= previousPosition) {
+                throw new IllegalArgumentException(
+                        "Step positions must be positive and strictly ascending, found out-of-order position "
+                                + step.getPosition() + " for step '" + step.getStepKey() + "'");
+            }
+            previousPosition = step.getPosition();
+
+            flowStepReferenceValidator.validateComponentReference(
+                    appUserId, step.getComponentType(), step.getComponentId(), step.getComponentVersionId());
+        }
+
+        FlowStep lastStep = steps.get(steps.size() - 1);
+        if (!TERMINAL_COMPONENT_TYPES.contains(lastStep.getComponentType())) {
+            throw new IllegalArgumentException(
+                    "The last step of a Flow must be RESPONSE or SUB_FLOW so the invocation can terminate, found "
+                            + lastStep.getComponentType() + " at position " + lastStep.getPosition());
+        }
     }
 
     @Transactional

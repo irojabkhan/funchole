@@ -14,5 +14,7 @@ public interface FlowStepRepository extends JpaRepository<FlowStep, UUID> {
 
     boolean existsByFlowVersion_Id(UUID flowVersionId);
 
+    Optional<FlowStep> findByFlowVersion_IdAndPosition(UUID flowVersionId, int position);
+
     void deleteAllByFlowVersion_Id(UUID flowVersionId);
 }

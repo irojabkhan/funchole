@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -154,6 +155,81 @@ class FlowIntegrationTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(stepPayload("step-one", "FUNCTION", 10, functionId, functionVersionId)))
                 .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void rejectsAdoptWhenLastStepIsNotResponseOrSubFlow() throws Exception {
+        String flowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        ReadyFunctionVersion function = createReadyFunctionVersion();
+
+        String flowId = createFlow(flowKey);
+        String versionId = createDraftVersion(flowId);
+        createStep(flowId, versionId, "step-one", "FUNCTION", 10, function);
+
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/adopt", flowId, versionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void rejectsCreatingAStepAtAPositionAlreadyUsedInTheSameVersion() throws Exception {
+        String flowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        ReadyFunctionVersion functionOne = createReadyFunctionVersion();
+        ReadyFunctionVersion functionTwo = createReadyFunctionVersion();
+
+        String flowId = createFlow(flowKey);
+        String versionId = createDraftVersion(flowId);
+        createStep(flowId, versionId, "step-one", "FUNCTION", 10, functionOne);
+
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/steps", flowId, versionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stepPayload("step-two", "RESPONSE", 10, functionTwo.functionId(), functionTwo.functionVersionId())))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void rejectsAdoptWhenAStepsFunctionWasSoftDeletedAfterAuthoring() throws Exception {
+        String flowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        ReadyFunctionVersion function = createReadyFunctionVersion();
+
+        String flowId = createFlow(flowKey);
+        String versionId = createDraftVersion(flowId);
+        createStep(flowId, versionId, "step-one", "RESPONSE", 10, function);
+
+        mockMvc.perform(delete("/api/v1/functions/{functionId}", function.functionId())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/adopt", flowId, versionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().is4xxClientError());
+    }
+
+    @Test
+    void adoptsFlowVersionEndingInASubFlowStep() throws Exception {
+        String childFlowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        ReadyFunctionVersion childFunction = createReadyFunctionVersion();
+        String childFlowId = createFlow(childFlowKey);
+        String childVersionId = createDraftVersion(childFlowId);
+        createStep(childFlowId, childVersionId, "child-response", "RESPONSE", 10, childFunction);
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/adopt", childFlowId, childVersionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        String parentFlowKey = "flw_test_" + UUID.randomUUID().toString().replace("-", "");
+        String parentFlowId = createFlow(parentFlowKey);
+        String parentVersionId = createDraftVersion(parentFlowId);
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/steps", parentFlowId, parentVersionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stepPayload("step-sub", "SUB_FLOW", 10, childFlowId, childVersionId)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/flows/{flowId}/versions/{versionId}/adopt", parentFlowId, parentVersionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ADOPTED"));
     }
 
     @Test
