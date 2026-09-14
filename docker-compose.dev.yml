@@ -11,10 +11,18 @@ services:
         condition: service_completed_successfully
       dns:
         condition: service_started
+      rustfs-init:
+        condition: service_completed_successfully
     environment:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       DNS_SERVICE_NAME: dns
+      S3_ARTIFACT_ENDPOINT: http://rustfs:9000
+      S3_ARTIFACT_BUCKET: funchole-artifacts
+      S3_ARTIFACT_ACCESS_KEY: funchole
+      S3_ARTIFACT_SECRET_KEY: funchole-secret
+      S3_ARTIFACT_REGION: us-east-1
+      S3_ARTIFACT_PATH_STYLE_ACCESS: "true"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s

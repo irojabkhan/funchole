@@ -9,6 +9,7 @@ import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilder;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilderRegistry;
 import java.util.UUID;
+import org.springframework.stereotype.Service;
 
 /**
  * Orchestrates the full source-to-deployed-artifact pipeline for a
@@ -48,6 +49,7 @@ import java.util.UUID;
  * registry remains an accepted limitation. A COMMITTED finalization is
  * terminal: compensation never runs for a successfully finalized READY
  * deployment. */
+@Service
 public class FunctionVersionDeploymentService {
 
     private final BuildWorkspaceService buildWorkspaceService;

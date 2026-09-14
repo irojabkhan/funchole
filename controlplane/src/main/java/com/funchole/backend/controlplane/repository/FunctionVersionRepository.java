@@ -32,8 +32,15 @@ public interface FunctionVersionRepository extends JpaRepository<FunctionVersion
      * exist" with a follow-up read, but the transition itself is decided
      * entirely by this one statement, so concurrent callers can never both
      * win it.
+     *
+     * <p>{@code flushAutomatically = true} is required, not optional: without
+     * it, any pending-but-unflushed write earlier in the same persistence
+     * context (e.g. a just-submitted source manifest) is silently discarded
+     * by {@code clearAutomatically}'s {@code entityManager.clear()} before it
+     * ever reaches the database - the bulk UPDATE itself succeeds, but a
+     * write that should have persisted just vanishes.
      */
-    @Modifying(clearAutomatically = true)
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE FunctionVersion fv SET fv.status = :newStatus, fv.updatedAt = :updatedAt "
             + "WHERE fv.id = :id AND fv.status = :expectedStatus")
     int compareAndSetStatus(
