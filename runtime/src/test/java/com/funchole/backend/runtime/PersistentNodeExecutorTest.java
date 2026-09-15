@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -57,6 +58,60 @@ class PersistentNodeExecutorTest {
 
         assertTrue(result.success());
         assertEquals("{\"n\":1}", result.output());
+    }
+
+    @Test
+    void injectsEnvironmentVariablesIntoHandlerProcessEnv() throws Exception {
+        executor = PersistentNodeExecutor.start("node", SCRIPT_PATH);
+        Path artifact = writeArtifact("env", """
+                export async function handler(input) {
+                    return {
+                        nodeEnv: process.env.NODE_ENV,
+                        apiToken: process.env.API_TOKEN
+                    };
+                }
+                """);
+
+        NodeExecutionRequest request = new NodeExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                artifact,
+                "handler",
+                "{}",
+                Map.of("NODE_ENV", "test", "API_TOKEN", "secret-token")
+        );
+        NodeExecutionResult result = executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+
+        assertTrue(result.success());
+        assertEquals("{\"nodeEnv\":\"test\",\"apiToken\":\"secret-token\"}", result.output());
+    }
+
+    @Test
+    void restoresEnvironmentVariablesAfterExecution() throws Exception {
+        executor = PersistentNodeExecutor.start("node", SCRIPT_PATH);
+        Path artifact = writeArtifact("env-restore", """
+                export async function handler(input) {
+                    return { apiToken: process.env.API_TOKEN ?? null };
+                }
+                """);
+
+        NodeExecutionRequest first = new NodeExecutionRequest(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                artifact,
+                "handler",
+                "{}",
+                Map.of("API_TOKEN", "secret-token")
+        );
+        NodeExecutionResult firstResult = executor.execute(first).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        NodeExecutionResult secondResult = execute(artifact, "{}");
+
+        assertTrue(firstResult.success());
+        assertTrue(secondResult.success());
+        assertEquals("{\"apiToken\":\"secret-token\"}", firstResult.output());
+        assertEquals("{\"apiToken\":null}", secondResult.output());
     }
 
     @Test

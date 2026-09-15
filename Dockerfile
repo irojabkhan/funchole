@@ -68,7 +68,9 @@ ENTRYPOINT ["/opt/funchole/entrypoint.sh"]
 
 FROM runtime-base AS dispatcher
 COPY --from=build-dispatcher /workspace/dispatcher/build/libs/funchole-dispatcher.jar app.jar
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+COPY docker/dispatcher-entrypoint.sh /opt/funchole/entrypoint.sh
+RUN chmod +x /opt/funchole/entrypoint.sh
+ENTRYPOINT ["/opt/funchole/entrypoint.sh"]
 
 FROM runtime-node-base AS runtime-worker
 COPY --from=build-runtime /workspace/runtime/build/libs/funchole-runtime.jar app.jar

@@ -35,7 +35,14 @@ public final class DispatcherMain {
                 new JdbcInvocationStepExecutionRegistry(dataSource),
                 createRuntimeRegistry(dataSource),
                 new ExecutionPlanner(),
-                executionGateway
+                executionGateway,
+                new JdbcFunctionVersionEnvironmentResolver(
+                        dataSource,
+                        new OpenBaoFunctionSecretReader(
+                                readString("BAO_ADDR", "http://localhost:8200"),
+                                readString("BAO_TOKEN", "root")
+                        )
+                )
         );
         Duration pollTimeout = Duration.ofMillis(readInt("DISPATCHER_POLL_TIMEOUT_MS", 1000));
 

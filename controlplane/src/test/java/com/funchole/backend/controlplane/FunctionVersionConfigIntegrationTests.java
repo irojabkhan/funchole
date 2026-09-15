@@ -128,6 +128,21 @@ class FunctionVersionConfigIntegrationTests {
                 .andExpect(status().isUnprocessableEntity());
     }
 
+    @Test
+    void rejectsUsingSameKeyAsPlainEnvVarAndSecret() throws Exception {
+        upsertEnv("API_TOKEN", "plain-token");
+
+        mockMvc.perform(put("/api/v1/functions/{functionId}/versions/{versionId}/config/secrets/API_TOKEN", functionId, versionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "value": "secret-token"
+                                }
+                                """))
+                .andExpect(status().isUnprocessableEntity());
+    }
+
     private void upsertEnv(String key, String value) throws Exception {
         mockMvc.perform(put("/api/v1/functions/{functionId}/versions/{versionId}/config/env/{key}", functionId, versionId, key)
                         .header("Authorization", "Bearer " + adminToken)

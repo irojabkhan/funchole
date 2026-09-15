@@ -145,6 +145,36 @@ class RuntimeWorkerServerTest {
     }
 
     @Test
+    void passesInvokeEnvironmentToArtifactProcessEnv() throws Exception {
+        UUID componentId = UUID.randomUUID();
+        UUID componentVersionId = writeArtifact("""
+                export async function handler(input) {
+                    return {
+                        nodeEnv: process.env.NODE_ENV,
+                        apiToken: process.env.API_TOKEN
+                    };
+                }
+                """);
+        UUID executionId = UUID.randomUUID();
+
+        try (TestClient client = TestClient.connect(socketPath)) {
+            client.sendInvokeWithEnvironment(
+                    executionId,
+                    "NODE",
+                    componentId,
+                    componentVersionId,
+                    "{}",
+                    "\"environment\":{\"NODE_ENV\":\"test\",\"API_TOKEN\":\"secret-token\"}"
+            );
+            client.readLine();
+            RuntimeTerminalMessage result = OBJECT_MAPPER.readValue(client.readLine(), RuntimeTerminalMessage.class);
+
+            assertEquals("RESULT", result.type());
+            assertEquals("{\"nodeEnv\":\"test\",\"apiToken\":\"secret-token\"}", result.output());
+        }
+    }
+
+    @Test
     void realArtifactFailureProducesRealError() throws Exception {
         UUID componentId = UUID.randomUUID();
         UUID componentVersionId = writeThrowingArtifact();
@@ -426,14 +456,38 @@ class RuntimeWorkerServerTest {
         void sendInvoke(
                 UUID executionId, String componentType, String runtimeType, UUID componentId, UUID componentVersionId, String input
         ) throws IOException {
+            sendInvokeWithEnvironment(executionId, componentType, runtimeType, componentId, componentVersionId, input, null);
+        }
+
+        void sendInvokeWithEnvironment(
+                UUID executionId,
+                String runtimeType,
+                UUID componentId,
+                UUID componentVersionId,
+                String input,
+                String environmentJsonField
+        ) throws IOException {
+            sendInvokeWithEnvironment(executionId, "FUNCTION", runtimeType, componentId, componentVersionId, input, environmentJsonField);
+        }
+
+        void sendInvokeWithEnvironment(
+                UUID executionId,
+                String componentType,
+                String runtimeType,
+                UUID componentId,
+                UUID componentVersionId,
+                String input,
+                String environmentJsonField
+        ) throws IOException {
             String escapedInput = input.replace("\\", "\\\\").replace("\"", "\\\"");
+            String environment = environmentJsonField == null ? "" : "," + environmentJsonField;
             String json = """
                     {"type":"INVOKE","executionId":"%s","payload":{"invocationId":"%s","flowId":null,"flowVersionId":null,\
                     "stepId":"%s","attempt":1,"componentType":"%s","componentId":"%s","componentVersionId":"%s",\
-                    "runtimeType":"%s","input":"%s"}}
+                    "runtimeType":"%s","input":"%s"%s}}
                     """.formatted(
                     executionId, UUID.randomUUID(), UUID.randomUUID(), componentType, componentId, componentVersionId,
-                    runtimeType, escapedInput);
+                    runtimeType, escapedInput, environment);
             sendRaw(json.strip());
         }
 

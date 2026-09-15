@@ -115,21 +115,21 @@ This document uses a feature-level implementation score:
 
 ### 3.1 Current baseline
 
-**Last recalculated:** 2026-09-15, after GAP-12 configuration/secrets foundation.
+**Last recalculated:** 2026-09-15, after GAP-12 runtime configuration injection.
 
-- **Master backlog completion:** **39.7%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7%, EPIC-02 through GAP-12 foundation)
+- **Master backlog completion:** **40.4%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4%, EPIC-02 through GAP-12 runtime injection)
 - **First human zero-to-running lifecycle scope:** **49.9%** *(pending full recompute — see §18 note)*
 - **MVP/product-oriented scope:** **39.7%** *(pending full recompute — see §18 note)*
 - **Agent/MCP scope:** **1.8%**
-- **Master backlog remaining:** **60.3%** (was 61.3% pre-GAP-12 foundation)
+- **Master backlog remaining:** **59.6%** (was 60.3% pre-GAP-12 runtime injection)
 
 Status count across all 350 features:
 
-- **COMPLETE:** 110 (was 108 pre-GAP-12 foundation; +F242, +F243)
+- **COMPLETE:** 114 (was 110 pre-GAP-12 runtime injection; +F238, +F239, +F240, +F241)
 - **INTERNAL_ONLY:** 7 (unchanged)
-- **PARTIAL:** 48 (was 45; +F238, +F239, +F240)
+- **PARTIAL:** 45 (was 48; F238, F239, F240 moved to COMPLETE)
 - **DECISION_REQUIRED:** 7 (unchanged)
-- **MISSING:** 178 (was 183; -F238, -F239, -F240, -F242, -F243)
+- **MISSING:** 177 (was 178; F241 moved to COMPLETE)
 
 ### 3.2 Important interpretation
 
@@ -195,7 +195,7 @@ The execution core is significantly more mature than the end-user product lifecy
 | GAP-09 | ~~Runtime Registry is static/in-memory and loses capacity state across Dispatcher restarts.~~ **RESOLVED 2026-09-15** — `JdbcRuntimeRegistry` now persists runtime registration/capacity state in PostgreSQL (`runtime_instances`) and Dispatcher uses it by default, with row-level locking (`FOR UPDATE SKIP LOCKED`) for multi-Dispatcher reservation coordination. The old `InMemoryRuntimeRegistry` remains intact as a baseline/opt-in mode. Worker self-registration, heartbeat expiry, distributed leases, orphan reservation reconciliation, and full dispatcher restart replay remain future hardening work. | Production scaling/recovery gap. | F139 complete; F135/F136 partial; F264 partial |
 | GAP-10 | No MCP server, CLI, or agent-facing lifecycle exists. | Blocks agent-first product goal. | F191–F229 |
 | GAP-11 | No Controlplane Web UI exists. | Blocks non-API human product experience. | F173–F190 |
-| GAP-12 | **PARTIALLY RESOLVED 2026-09-15** — FunctionVersion-scoped configuration foundation now exists: non-secret env vars are persisted in PostgreSQL, secret values are written to OpenBao, PostgreSQL stores only secret references, and the Controlplane exposes authenticated config APIs. Runtime injection, redaction, rotation, resource governance, and logging pipeline hardening remain open. | Blocks production readiness. | F238–F282 |
+| GAP-12 | **PARTIALLY RESOLVED 2026-09-15** — FunctionVersion-scoped runtime configuration now exists end-to-end: non-secret env vars are persisted in PostgreSQL, secret values are written to OpenBao, PostgreSQL stores only secret references, Dispatcher resolves the exact FunctionVersion environment, IPC carries the resolved map, and the Node Runtime injects it into `process.env` for artifact execution. Redaction, rotation, resource governance, and logging pipeline hardening remain open. | Blocks production readiness. | F238–F282 |
 | GAP-13 | ~~Neither the user-chosen entrypoint file nor the exported handler function name survived past the build step: `ArtifactPublisher.publish()` took no entrypoint parameter, `ArtifactMetadata` had no entrypoint/handler fields, and `LocalArtifactStore`/`S3ArtifactStore`/`FilesystemArtifactCache` all hardcoded `index.mjs` + `loadedModule.handler` — correct only by coincidence, because the two dev-seed artifacts happen to be named and exported that way.~~ **RESOLVED 2026-09-14** — found via user code review while wiring source submission. Fixed by giving every artifact a self-describing `ArtifactManifest` (`.funchole-artifact.json`) written by `NodeRuntimeBuilder` and read by all three artifact-resolution sites, since the Runtime Worker never queries Postgres and can only ever learn this from the artifact bytes themselves. `runtime/node/executor.mjs` now invokes `loadedModule[handler]` instead of a hardcoded `loadedModule.handler`. | Would have silently broken execution for any real function whose entrypoint wasn't literally `index.mjs` exporting `handler`, the instant Build/Deploy got wired to a transport. | F014, F040, F140–F145 |
 | GAP-14 | ~~`FunctionVersionRepository.compareAndSetStatus`'s `@Modifying(clearAutomatically = true)` had no `flushAutomatically = true`, so a pending-but-unflushed write earlier in the same persistence context (e.g. a just-submitted source manifest) could be silently discarded by `clearAutomatically`'s `entityManager.clear()` before it ever reached the database — the bulk UPDATE itself would still succeed, masking the loss.~~ **RESOLVED 2026-09-14** — found while building and testing the real deploy endpoint end-to-end within one transaction (submit source → deploy): the source row vanished with a "no source submitted" error even though it had just been written and confirmed via the API response. Fixed by adding `flushAutomatically = true`. | A submitted source could be silently lost immediately before a deploy attempt in any code path that shares a transaction across both writes. | F037, F040 |
 | GAP-15 | ~~`flow_steps` had a DB-level unique `(flow_version_id, position)` constraint (`uk_flow_steps_version_position`) as the only guard against duplicate step positions, but `FlowStepService.createStep`/`updateStep` never flushed immediately, so the violation surfaced later and unpredictably — as an opaque 500 `DataIntegrityViolationException` whenever Hibernate's next auto-flush happened to occur (in practice: during `adoptVersion`'s own `SELECT`, nowhere near the actual duplicate `createStep` call), instead of a clean 4xx at the point of the real mistake.~~ **RESOLVED 2026-09-14 (STORY-M1-07)** — found while writing a test for adopt-time position-ordering validation: creating two steps at the same position both returned 200, then `adopt` 500'd. Fixed by adding a proactive `FlowStepRepository.findByFlowVersion_IdAndPosition` check in `FlowStepService.createStep`/`updateStep`, so a duplicate position now fails immediately with a clear 422 naming the conflicting step. | A duplicate step position could pass step creation silently and only surface as an unexplained server error at some later, unrelated request. | F078 |
@@ -1119,24 +1119,24 @@ Parallel work is allowed only where it does not change these contracts.
 **User story:** Functions receive secure runtime configuration
 
 **Tracked features:** F238–F245  
-**Current planning score:** **50.0%**  
+**Current planning score:** **81.2%**  
 **Feature count:** 8  
-**Complete features:** 2/8
+**Complete features:** 6/8
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
-**Status:** Foundation delivered 2026-09-15 — `FunctionVersionConfigController` exposes authenticated get/upsert APIs under the exact FunctionVersion resource. `function_version_env_vars` stores plain non-secret values in PostgreSQL. `function_version_secrets` stores only OpenBao secret references, while `OpenBaoFunctionSecretStore` writes the actual secret value to OpenBao. This closes the version-scoped config model and non-secret env metadata surface, but does **not** inject configuration into Runtime execution yet. Secret redaction, rotation, runtime injection, resource governance, and network-policy hardening remain future work.
+**Status:** Runtime injection delivered 2026-09-15 — `FunctionVersionConfigController` exposes authenticated get/upsert APIs under the exact FunctionVersion resource. `function_version_env_vars` stores plain non-secret values in PostgreSQL. `function_version_secrets` stores only OpenBao secret references, while `OpenBaoFunctionSecretStore` writes the actual secret value to OpenBao. Dispatcher resolves the exact FunctionVersion environment, reads secret values through OpenBao, sends the resolved map over IPC, and the Node Runtime injects it into `process.env` for the artifact handler. Secret redaction, rotation, resource governance, and network-policy hardening remain future work.
 
 #### Tasks
 
 - [ ] **T01 — Environment variables**
   - [x] non-secret vars
   - [x] scope model
-  - [ ] runtime injection
+  - [x] runtime injection
 - [ ] **T02 — Secrets**
   - [x] secret references in PostgreSQL with values stored in OpenBao
   - [ ] redaction
-  - [ ] runtime injection
+  - [x] runtime injection
   - [ ] rotation
 - [ ] **T03 — Network policy**
   - [ ] outbound policy
@@ -1147,10 +1147,10 @@ Parallel work is allowed only where it does not change these contracts.
 
 | ID | Feature | Status | Priority | Target/Milestone | Score |
 |---|---|---|---|---|---:|
-| F238 | Function environment variables | PARTIAL | P0 | M1 — Human zero-to-running | 50% |
-| F239 | Secret values | PARTIAL | P0 | M1 — Human zero-to-running | 50% |
-| F240 | Secret storage/encryption | PARTIAL | P2 | M1 — Human zero-to-running | 50% |
-| F241 | Secret injection into runtime | MISSING | P2 | M1 — Human zero-to-running | 0% |
+| F238 | Function environment variables | COMPLETE | P0 | M1 — Human zero-to-running | 100% |
+| F239 | Secret values | COMPLETE | P0 | M1 — Human zero-to-running | 100% |
+| F240 | Secret storage/encryption | COMPLETE | P2 | M1 — Human zero-to-running | 100% |
+| F241 | Secret injection into runtime | COMPLETE | P2 | M1 — Human zero-to-running | 100% |
 | F242 | Version/environment scoped config | COMPLETE | P3 | M1 — Human zero-to-running | 100% |
 | F243 | Non-secret environment variables | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
 | F244 | Outbound network policy | MISSING | P2 | M5 — Product hardening | 0% |
@@ -2268,10 +2268,10 @@ This is the authoritative checklist for this PRD.
 | F235 | Authorization | Resource-level authorization | PARTIAL | 50% | P2 | M1 — Human zero-to-running |
 | F236 | Authorization | Roles/permissions | MISSING | 0% | P2 | M1 — Human zero-to-running |
 | F237 | Multi-tenancy | Tenant/workspace isolation | MISSING | 0% | P2 | M1 — Human zero-to-running |
-| F238 | Secrets | Function environment variables | PARTIAL | 50% | P0 | M1 — Human zero-to-running |
-| F239 | Secrets | Secret values | PARTIAL | 50% | P0 | M1 — Human zero-to-running |
-| F240 | Secrets | Secret storage/encryption | PARTIAL | 50% | P2 | M1 — Human zero-to-running |
-| F241 | Secrets | Secret injection into runtime | MISSING | 0% | P2 | M1 — Human zero-to-running |
+| F238 | Secrets | Function environment variables | COMPLETE | 100% | P0 | M1 — Human zero-to-running |
+| F239 | Secrets | Secret values | COMPLETE | 100% | P0 | M1 — Human zero-to-running |
+| F240 | Secrets | Secret storage/encryption | COMPLETE | 100% | P2 | M1 — Human zero-to-running |
+| F241 | Secrets | Secret injection into runtime | COMPLETE | 100% | P2 | M1 — Human zero-to-running |
 | F242 | Secrets | Version/environment scoped config | COMPLETE | 100% | P3 | M1 — Human zero-to-running |
 | F243 | Configuration | Non-secret environment variables | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
 | F244 | Networking | Outbound network policy | MISSING | 0% | P2 | M5 — Product hardening |
@@ -2428,7 +2428,7 @@ This is the authoritative checklist for this PRD.
 | Runtime | 16 | 43.8% |
 | Runtime Catalog | 3 | 0.0% |
 | Runtime Registry | 5 | 80.0% |
-| Secrets | 5 | 50.0% |
+| Secrets | 5 | 100.0% |
 | Security | 8 | 0.0% |
 | Source | 15 | 70.0% |
 | Testing | 10 | 31.0% |
@@ -2444,12 +2444,12 @@ This is the authoritative checklist for this PRD.
 ### Overall
 
 - **350 / 350** master backlog candidates are represented in this PRD.
-- **Current master-backlog implementation score:** **39.7%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7%, EPIC-02 through GAP-12 foundation)
-- **Remaining master-backlog scope by score:** **60.3%**
+- **Current master-backlog implementation score:** **40.4%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4%, EPIC-02 through GAP-12 runtime injection)
+- **Remaining master-backlog scope by score:** **59.6%**
 - **First human zero-to-running lifecycle score:** **49.9%** *(not yet recalculated — see note below)*
 - **Agent/MCP score:** **1.8%**
 
-> **Note on this update (2026-09-15):** GAP-12's first configuration/secrets foundation has now shipped after the GAP-08/GAP-09 reliability closure. FunctionVersion-scoped non-secret environment variables now have a Controlplane API and PostgreSQL persistence (`function_version_env_vars`). Secret values now have a Controlplane API that writes the value to OpenBao and persists only the reference in PostgreSQL (`function_version_secrets`). This moves F242 and F243 to COMPLETE and F238, F239 and F240 to PARTIAL. Runtime injection, secret redaction, rotation, and resource-governance/logging hardening remain intentionally open, so F241 and F273 are not closed by this slice. The master backlog score above and the status counts are recalculated from the F001–F350 table. The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
+> **Note on this update (2026-09-15):** GAP-12's runtime configuration path has now shipped after the initial configuration/secrets foundation. FunctionVersion-scoped non-secret environment variables have a Controlplane API and PostgreSQL persistence (`function_version_env_vars`). Secret values have a Controlplane API that writes the value to OpenBao and persists only the reference in PostgreSQL (`function_version_secrets`). Dispatcher resolves the exact FunctionVersion environment, reads OpenBao secret values, IPC carries the resolved map, and the Node Runtime injects it into `process.env` for artifact execution. This moves F238, F239, F240, F241, F242 and F243 to COMPLETE. Secret redaction, rotation, resource-governance, and logging hardening remain intentionally open, so F273 and related hardening features are not closed by this slice. The master backlog score above and the status counts are recalculated from the F001–F350 table. The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
 
 ### What the percentage does *not* mean
 

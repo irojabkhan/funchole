@@ -1,6 +1,7 @@
 package com.funchole.backend.runtime;
 
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * Java Runtime Worker -> Node Executor envelope. One line of
@@ -13,7 +14,8 @@ record NodeExecuteMessage(
         UUID componentVersionId,
         String artifactPath,
         String handler,
-        String input
+        String input,
+        Map<String, String> environment
 ) {
 
     static final String TYPE = "EXECUTE";
@@ -26,7 +28,8 @@ record NodeExecuteMessage(
                 request.componentVersionId(),
                 request.artifactPath().toString(),
                 request.handler(),
-                request.input()
+                request.input(),
+                request.environment()
         );
     }
 }

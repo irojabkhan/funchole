@@ -27,6 +27,7 @@ import io.nats.client.Connection;
 import io.nats.client.Nats;
 import java.sql.Statement;
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
@@ -473,6 +474,35 @@ class InvocationDispatcherTest {
                 Duration.ofSeconds(5)
         );
         assertFalse(dispatcher.processNext(Duration.ofMillis(500)));
+    }
+
+    @Test
+    void injectsResolvedFunctionVersionEnvironmentIntoRuntimeRequest() throws Exception {
+        UUID flowId = UUID.fromString("10000000-0000-0000-0000-000000000621");
+        UUID flowVersionId = UUID.fromString("20000000-0000-0000-0000-000000000621");
+        UUID componentId = UUID.fromString("30000000-0000-0000-0000-000000000621");
+        UUID componentVersionId = UUID.fromString("40000000-0000-0000-0000-000000000621");
+        insertFlow(flowId, "flw_env_injection", flowVersionId, 1);
+        insertStep(flowVersionId, "read-env", "FUNCTION", 1, componentId, componentVersionId);
+        Invocation invocation = invocationRegistry.create(new CreateInvocationRequest(
+                flowId,
+                "flw_env_injection",
+                flowVersionId,
+                "{}"
+        ));
+        CapturingRuntimeExecutionGateway gateway = new CapturingRuntimeExecutionGateway();
+        InvocationDispatcher dispatcher = new InvocationDispatcher(
+                natsConnection, invocationRegistry, stepExecutionRegistry, runtimeRegistry,
+                new ExecutionPlanner(), gateway,
+                versionId -> Map.of("NODE_ENV", "test", "API_TOKEN", "secret-token")
+        );
+
+        assertTrue(dispatcher.processNext(Duration.ofSeconds(5)));
+
+        RuntimeExecutionRequest request = gateway.capturedRequest();
+        assertEquals(invocation.invocationId(), request.invocationId());
+        assertEquals(componentVersionId, request.componentVersionId());
+        assertEquals(Map.of("NODE_ENV", "test", "API_TOKEN", "secret-token"), request.environment());
     }
 
     @Test

@@ -2,6 +2,8 @@
 
 set -eu
 
+. /workspace/docker/openbao-common.sh
+
 cd /workspace
 chmod +x ./gradlew
 chmod +x /workspace/docker/watch-and-run.sh
@@ -10,6 +12,9 @@ chmod +x /workspace/docker/watch-and-run.sh
 # never races with another dev-compose service compiling the same shared
 # module (e.g. :core) at the same time. See build.gradle.
 export FUNCHOLE_BUILD_DIR_ROOT="/tmp/funchole-gradle-build"
+
+wait_for_openbao
+load_bao_token
 
 exec /workspace/docker/watch-and-run.sh \
     /workspace/core/src \

@@ -1,6 +1,7 @@
 package com.funchole.backend.dispatcher;
 
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * Wire shape of the INVOKE payload sent to a Runtime Worker over IPC. Mirrors
@@ -19,8 +20,13 @@ record IpcInvokePayload(
         UUID componentId,
         UUID componentVersionId,
         String runtimeType,
-        String input
+        String input,
+        Map<String, String> environment
 ) {
+
+    public IpcInvokePayload {
+        environment = environment == null ? Map.of() : Map.copyOf(environment);
+    }
 
     static IpcInvokePayload from(RuntimeExecutionRequest request) {
         return new IpcInvokePayload(
@@ -33,7 +39,8 @@ record IpcInvokePayload(
                 request.componentId(),
                 request.componentVersionId(),
                 request.runtimeType(),
-                request.input()
+                request.input(),
+                request.environment()
         );
     }
 }

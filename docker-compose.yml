@@ -58,15 +58,21 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      openbao-init:
+        condition: service_completed_successfully
       controlplane:
         condition: service_healthy
       nats:
         condition: service_started
     environment:
       NATS_URL: nats://nats:4222
+      BAO_ADDR: http://openbao:8200
+      BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       DB_URL: jdbc:postgresql://db:5432/funchole
       DB_USERNAME: funchole
       DB_PASSWORD: funchole
+    volumes:
+      - openbao-data:/openbao:ro
     networks:
       - funchole-network
 

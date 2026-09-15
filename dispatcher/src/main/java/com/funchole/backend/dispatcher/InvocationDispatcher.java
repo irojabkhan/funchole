@@ -48,6 +48,7 @@ public final class InvocationDispatcher {
     private final InvocationSnapshotValidator snapshotValidator;
     private final ExecutionPlanner executionPlanner;
     private final RuntimeExecutionGateway executionGateway;
+    private final FunctionVersionEnvironmentResolver environmentResolver;
     private final JetStreamSubscription subscription;
 
     /**
@@ -101,6 +102,19 @@ public final class InvocationDispatcher {
             ExecutionPlanner executionPlanner,
             RuntimeExecutionGateway executionGateway
     ) {
+        this(connection, invocationRegistry, stepExecutionRegistry, runtimeRegistry,
+                executionPlanner, executionGateway, new NoopFunctionVersionEnvironmentResolver());
+    }
+
+    public InvocationDispatcher(
+            Connection connection,
+            InvocationRegistry invocationRegistry,
+            InvocationStepExecutionRegistry stepExecutionRegistry,
+            RuntimeRegistry runtimeRegistry,
+            ExecutionPlanner executionPlanner,
+            RuntimeExecutionGateway executionGateway,
+            FunctionVersionEnvironmentResolver environmentResolver
+    ) {
         this.connection = connection;
         this.invocationRegistry = invocationRegistry;
         this.stepExecutionRegistry = stepExecutionRegistry;
@@ -109,6 +123,7 @@ public final class InvocationDispatcher {
         this.snapshotValidator = new InvocationSnapshotValidator();
         this.executionPlanner = executionPlanner;
         this.executionGateway = executionGateway;
+        this.environmentResolver = environmentResolver;
         ensureStream();
         this.subscription = subscribe();
     }
@@ -220,7 +235,8 @@ public final class InvocationDispatcher {
                 runtimeTarget.runtimeType()
         );
         try {
-            RuntimeExecutionRequest executionRequest = RuntimeExecutionRequest.of(stepExecution, stepInput);
+            Map<String, String> environment = environmentResolver.resolve(stepExecution.componentVersionId());
+            RuntimeExecutionRequest executionRequest = RuntimeExecutionRequest.of(stepExecution, stepInput, environment);
             RuntimeExecutionHandle handle = executionGateway.handoff(runtimeTarget, executionRequest);
             RuntimeExecutionAcceptance acceptance = handle.acceptance();
             if (!acceptance.accepted()) {

@@ -73,6 +73,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      openbao-init:
+        condition: service_completed_successfully
       controlplane:
         condition: service_healthy
       nats:
@@ -81,6 +83,8 @@ services:
         condition: service_started
     environment:
       NATS_URL: nats://nats:4222
+      BAO_ADDR: http://openbao:8200
+      BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       DB_URL: jdbc:postgresql://db:5432/funchole
       DB_USERNAME: funchole
       DB_PASSWORD: funchole
@@ -89,6 +93,7 @@ services:
       DEV_RUNTIME_SOCKET_PATH: /tmp/funchole/runtime-node-dev-1.sock
     volumes:
       - .:/workspace
+      - openbao-dev-data:/openbao:ro
       - runtime-sockets:/tmp/funchole
     entrypoint: ["sh", "/workspace/docker/dispatcher-dev-entrypoint.sh"]
     networks:

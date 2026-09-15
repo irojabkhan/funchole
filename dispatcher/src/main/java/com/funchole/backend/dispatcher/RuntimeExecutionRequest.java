@@ -1,6 +1,7 @@
 package com.funchole.backend.dispatcher;
 
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * One concrete execution attempt handed to a selected runtime target.
@@ -28,10 +29,52 @@ public record RuntimeExecutionRequest(
         UUID componentId,
         UUID componentVersionId,
         String runtimeType,
-        String input
+        String input,
+        Map<String, String> environment
 ) {
 
+    public RuntimeExecutionRequest {
+        environment = environment == null ? Map.of() : Map.copyOf(environment);
+    }
+
+    public RuntimeExecutionRequest(
+            UUID executionId,
+            UUID invocationId,
+            UUID flowId,
+            UUID flowVersionId,
+            UUID stepId,
+            int attempt,
+            String componentType,
+            UUID componentId,
+            UUID componentVersionId,
+            String runtimeType,
+            String input
+    ) {
+        this(
+                executionId,
+                invocationId,
+                flowId,
+                flowVersionId,
+                stepId,
+                attempt,
+                componentType,
+                componentId,
+                componentVersionId,
+                runtimeType,
+                input,
+                Map.of()
+        );
+    }
+
     public static RuntimeExecutionRequest of(InvocationStepExecution stepExecution, String input) {
+        return of(stepExecution, input, Map.of());
+    }
+
+    public static RuntimeExecutionRequest of(
+            InvocationStepExecution stepExecution,
+            String input,
+            Map<String, String> environment
+    ) {
         return new RuntimeExecutionRequest(
                 stepExecution.id(),
                 stepExecution.invocationId(),
@@ -43,7 +86,8 @@ public record RuntimeExecutionRequest(
                 stepExecution.componentId(),
                 stepExecution.componentVersionId(),
                 stepExecution.runtimeType(),
-                input
+                input,
+                environment
         );
     }
 }

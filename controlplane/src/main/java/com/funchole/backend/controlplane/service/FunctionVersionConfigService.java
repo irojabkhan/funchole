@@ -51,6 +51,9 @@ public class FunctionVersionConfigService {
     ) {
         validateKey(key);
         FunctionVersion functionVersion = functionVersionService.getVersionById(appUserId, functionId, versionId);
+        if (secretRepository.findByFunctionVersion_IdAndKey(versionId, key).isPresent()) {
+            throw new IllegalArgumentException("Config key already exists as a secret: " + key);
+        }
         FunctionVersionEnvVar envVar = envVarRepository.findByFunctionVersion_IdAndKey(versionId, key)
                 .map(existing -> {
                     existing.updateValue(value);
@@ -71,6 +74,9 @@ public class FunctionVersionConfigService {
     ) {
         validateKey(key);
         FunctionVersion functionVersion = functionVersionService.getVersionById(appUserId, functionId, versionId);
+        if (envVarRepository.findByFunctionVersion_IdAndKey(versionId, key).isPresent()) {
+            throw new IllegalArgumentException("Config key already exists as an env var: " + key);
+        }
         String secretRef = functionSecretStore.save(versionId, key, value);
         FunctionVersionSecret secret = secretRepository.findByFunctionVersion_IdAndKey(versionId, key)
                 .map(existing -> {
