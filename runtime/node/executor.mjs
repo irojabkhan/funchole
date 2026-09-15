@@ -13,12 +13,17 @@
 import { createInterface } from "node:readline";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { inspect } from "node:util";
 
 const rl = createInterface({ input: process.stdin, terminal: false });
 let executionQueue = Promise.resolve();
 
 function writeMessage(message) {
   process.stdout.write(JSON.stringify(message) + "\n");
+}
+
+function sendLog(executionId, stream, message) {
+  writeMessage({ type: "LOG", executionId, stream, message });
 }
 
 function sendError(executionId, code, message) {
@@ -59,7 +64,7 @@ async function handleExecute(message) {
 
   let output;
   try {
-    output = await withEnvironment(environment, () => handler(parsedInput));
+    output = await withExecutionContext(executionId, environment, () => handler(parsedInput));
   } catch (error) {
     sendError(executionId, "ARTIFACT_EXECUTION_ERROR", error && error.message ? error.message : String(error));
     return;
@@ -76,16 +81,30 @@ async function handleExecute(message) {
   writeMessage({ type: "RESULT", executionId, output: serializedOutput });
 }
 
-async function withEnvironment(environment, callback) {
+async function withExecutionContext(executionId, environment, callback) {
   const previous = new Map();
+  const originalConsole = {
+    log: console.log,
+    info: console.info,
+    warn: console.warn,
+    error: console.error,
+    debug: console.debug,
+  };
+  const redactor = createRedactor(environment);
   for (const [key, value] of Object.entries(environment)) {
     previous.set(key, Object.prototype.hasOwnProperty.call(process.env, key) ? process.env[key] : undefined);
     process.env[key] = String(value);
   }
+  installConsoleCapture(executionId, redactor);
 
   try {
     return await callback();
   } finally {
+    console.log = originalConsole.log;
+    console.info = originalConsole.info;
+    console.warn = originalConsole.warn;
+    console.error = originalConsole.error;
+    console.debug = originalConsole.debug;
     for (const [key, value] of previous.entries()) {
       if (value === undefined) {
         delete process.env[key];
@@ -94,6 +113,32 @@ async function withEnvironment(environment, callback) {
       }
     }
   }
+}
+
+function installConsoleCapture(executionId, redactor) {
+  console.log = (...args) => sendLog(executionId, "stdout", redactor(formatArgs(args)));
+  console.info = (...args) => sendLog(executionId, "stdout", redactor(formatArgs(args)));
+  console.debug = (...args) => sendLog(executionId, "stdout", redactor(formatArgs(args)));
+  console.warn = (...args) => sendLog(executionId, "stderr", redactor(formatArgs(args)));
+  console.error = (...args) => sendLog(executionId, "stderr", redactor(formatArgs(args)));
+}
+
+function formatArgs(args) {
+  return args.map((arg) => typeof arg === "string" ? arg : inspect(arg, { depth: 6, breakLength: Infinity })).join(" ");
+}
+
+function createRedactor(environment) {
+  const secrets = Object.values(environment)
+    .map((value) => String(value))
+    .filter((value) => value.length >= 4);
+
+  return (message) => {
+    let redacted = message;
+    for (const secret of secrets) {
+      redacted = redacted.split(secret).join("[REDACTED]");
+    }
+    return redacted;
+  };
 }
 
 rl.on("line", (line) => {

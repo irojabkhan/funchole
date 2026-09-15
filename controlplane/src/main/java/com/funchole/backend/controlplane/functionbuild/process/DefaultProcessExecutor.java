@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Comparator;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -55,7 +56,7 @@ public class DefaultProcessExecutor implements ProcessExecutor {
             // itself interrupted - either way the child must not be left
             // running, so kill it unconditionally before surfacing this.
             if (process != null) {
-                process.destroyForcibly();
+                terminateProcessTree(process);
             }
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while executing command: " + command, exception);
@@ -70,8 +71,16 @@ public class DefaultProcessExecutor implements ProcessExecutor {
      * child is still running.
      */
     private void terminateAndAwait(Process process) throws InterruptedException {
-        process.destroyForcibly();
+        terminateProcessTree(process);
         process.waitFor();
+    }
+
+    private void terminateProcessTree(Process process) {
+        process.toHandle()
+                .descendants()
+                .sorted(Comparator.comparingLong(ProcessHandle::pid).reversed())
+                .forEach(ProcessHandle::destroyForcibly);
+        process.destroyForcibly();
     }
 
     private String readFully(InputStream inputStream) throws IOException {

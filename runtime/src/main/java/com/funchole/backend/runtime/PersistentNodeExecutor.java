@@ -146,11 +146,24 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
     }
 
     private void handleLine(String line) {
+        String type;
+        try {
+            type = objectMapper.readTree(line).path("type").asText();
+        } catch (IOException exception) {
+            logger.warn("Discarding malformed Node executor message: {}", exception.getMessage());
+            return;
+        }
+
+        if (NodeLogMessage.TYPE.equals(type)) {
+            handleLog(line);
+            return;
+        }
+
         NodeTerminalMessage message;
         try {
             message = objectMapper.readValue(line, NodeTerminalMessage.class);
         } catch (IOException exception) {
-            logger.warn("Discarding malformed Node executor message: {}", exception.getMessage());
+            logger.warn("Discarding malformed Node terminal message: {}", exception.getMessage());
             return;
         }
         if (message.executionId() == null) {
@@ -169,6 +182,20 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
                 result.executionId(), result.success()
         );
         future.complete(result);
+    }
+
+    private void handleLog(String line) {
+        try {
+            NodeLogMessage message = objectMapper.readValue(line, NodeLogMessage.class);
+            logger.info(
+                    "Function log: executionId={}, stream={}, message={}",
+                    message.executionId(),
+                    message.stream(),
+                    message.message()
+            );
+        } catch (IOException exception) {
+            logger.warn("Discarding malformed Node log message: {}", exception.getMessage());
+        }
     }
 
     private void drainStderr() {

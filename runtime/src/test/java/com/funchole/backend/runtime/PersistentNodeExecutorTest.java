@@ -6,9 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,6 +29,7 @@ import org.junit.jupiter.api.io.TempDir;
 class PersistentNodeExecutorTest {
 
     private static final Path SCRIPT_PATH = Path.of("node", "executor.mjs").toAbsolutePath();
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @TempDir
     Path artifactsRoot;
@@ -85,6 +92,66 @@ class PersistentNodeExecutorTest {
 
         assertTrue(result.success());
         assertEquals("{\"nodeEnv\":\"test\",\"apiToken\":\"secret-token\"}", result.output());
+    }
+
+    @Test
+    void userConsoleLogDoesNotCorruptProtocolResult() throws Exception {
+        executor = PersistentNodeExecutor.start("node", SCRIPT_PATH);
+        Path artifact = writeArtifact("logging", """
+                export async function handler(input) {
+                    console.log("hello from artifact", input);
+                    console.error("artifact warning");
+                    return { ok: true };
+                }
+                """);
+
+        NodeExecutionResult result = execute(artifact, "{\"path\":\"/orders\"}");
+
+        assertTrue(result.success());
+        assertEquals("{\"ok\":true}", result.output());
+    }
+
+    @Test
+    void emittedFunctionLogsRedactInjectedSecretValues() throws Exception {
+        Path artifact = writeArtifact("redacted-logging", """
+                export async function handler(input) {
+                    console.log("token", process.env.API_TOKEN);
+                    return { ok: true };
+                }
+                """);
+        UUID executionId = UUID.randomUUID();
+        Process process = new ProcessBuilder("node", SCRIPT_PATH.toString()).start();
+
+        try (
+                OutputStream stdin = process.getOutputStream();
+                BufferedReader stdout = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))
+        ) {
+            String executeMessage = OBJECT_MAPPER.writeValueAsString(Map.of(
+                    "type", "EXECUTE",
+                    "executionId", executionId,
+                    "componentId", UUID.randomUUID(),
+                    "componentVersionId", UUID.randomUUID(),
+                    "artifactPath", artifact.toString(),
+                    "handler", "handler",
+                    "input", "{}",
+                    "environment", Map.of("API_TOKEN", "secret-token")
+            ));
+            stdin.write((executeMessage + "\n").getBytes(StandardCharsets.UTF_8));
+            stdin.flush();
+
+            JsonNode log = OBJECT_MAPPER.readTree(stdout.readLine());
+            JsonNode result = OBJECT_MAPPER.readTree(stdout.readLine());
+
+            assertEquals("LOG", log.path("type").asText());
+            assertEquals(executionId.toString(), log.path("executionId").asText());
+            assertEquals("stdout", log.path("stream").asText());
+            assertEquals("token [REDACTED]", log.path("message").asText());
+            assertEquals("RESULT", result.path("type").asText());
+            assertEquals("{\"ok\":true}", result.path("output").asText());
+        } finally {
+            process.destroyForcibly();
+        }
     }
 
     @Test

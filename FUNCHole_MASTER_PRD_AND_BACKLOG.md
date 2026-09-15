@@ -115,21 +115,21 @@ This document uses a feature-level implementation score:
 
 ### 3.1 Current baseline
 
-**Last recalculated:** 2026-09-15, after GAP-12 runtime configuration injection.
+**Last recalculated:** 2026-09-15, after runtime log protocol isolation/redaction foundation.
 
-- **Master backlog completion:** **40.4%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4%, EPIC-02 through GAP-12 runtime injection)
+- **Master backlog completion:** **40.8%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8%, EPIC-02 through runtime log protocol isolation)
 - **First human zero-to-running lifecycle scope:** **49.9%** *(pending full recompute — see §18 note)*
 - **MVP/product-oriented scope:** **39.7%** *(pending full recompute — see §18 note)*
 - **Agent/MCP scope:** **1.8%**
-- **Master backlog remaining:** **59.6%** (was 60.3% pre-GAP-12 runtime injection)
+- **Master backlog remaining:** **59.2%** (was 59.6% pre-runtime log protocol isolation)
 
 Status count across all 350 features:
 
 - **COMPLETE:** 114 (was 110 pre-GAP-12 runtime injection; +F238, +F239, +F240, +F241)
 - **INTERNAL_ONLY:** 7 (unchanged)
-- **PARTIAL:** 45 (was 48; F238, F239, F240 moved to COMPLETE)
+- **PARTIAL:** 48 (was 45; +F246, +F247, +F273)
 - **DECISION_REQUIRED:** 7 (unchanged)
-- **MISSING:** 177 (was 178; F241 moved to COMPLETE)
+- **MISSING:** 174 (was 177; F246, F247, F273 moved to PARTIAL)
 
 ### 3.2 Important interpretation
 
@@ -195,7 +195,7 @@ The execution core is significantly more mature than the end-user product lifecy
 | GAP-09 | ~~Runtime Registry is static/in-memory and loses capacity state across Dispatcher restarts.~~ **RESOLVED 2026-09-15** — `JdbcRuntimeRegistry` now persists runtime registration/capacity state in PostgreSQL (`runtime_instances`) and Dispatcher uses it by default, with row-level locking (`FOR UPDATE SKIP LOCKED`) for multi-Dispatcher reservation coordination. The old `InMemoryRuntimeRegistry` remains intact as a baseline/opt-in mode. Worker self-registration, heartbeat expiry, distributed leases, orphan reservation reconciliation, and full dispatcher restart replay remain future hardening work. | Production scaling/recovery gap. | F139 complete; F135/F136 partial; F264 partial |
 | GAP-10 | No MCP server, CLI, or agent-facing lifecycle exists. | Blocks agent-first product goal. | F191–F229 |
 | GAP-11 | No Controlplane Web UI exists. | Blocks non-API human product experience. | F173–F190 |
-| GAP-12 | **PARTIALLY RESOLVED 2026-09-15** — FunctionVersion-scoped runtime configuration now exists end-to-end: non-secret env vars are persisted in PostgreSQL, secret values are written to OpenBao, PostgreSQL stores only secret references, Dispatcher resolves the exact FunctionVersion environment, IPC carries the resolved map, and the Node Runtime injects it into `process.env` for artifact execution. Redaction, rotation, resource governance, and logging pipeline hardening remain open. | Blocks production readiness. | F238–F282 |
+| GAP-12 | **PARTIALLY RESOLVED 2026-09-15** — FunctionVersion-scoped runtime configuration now exists end-to-end: non-secret env vars are persisted in PostgreSQL, secret values are written to OpenBao, PostgreSQL stores only secret references, Dispatcher resolves the exact FunctionVersion environment, IPC carries the resolved map, and the Node Runtime injects it into `process.env` for artifact execution. Runtime console output is now isolated from the Node executor protocol and emitted as structured, redacted runtime logs. Rotation, persisted/queryable logs, resource governance, and full logging pipeline hardening remain open. | Blocks production readiness. | F238–F282 |
 | GAP-13 | ~~Neither the user-chosen entrypoint file nor the exported handler function name survived past the build step: `ArtifactPublisher.publish()` took no entrypoint parameter, `ArtifactMetadata` had no entrypoint/handler fields, and `LocalArtifactStore`/`S3ArtifactStore`/`FilesystemArtifactCache` all hardcoded `index.mjs` + `loadedModule.handler` — correct only by coincidence, because the two dev-seed artifacts happen to be named and exported that way.~~ **RESOLVED 2026-09-14** — found via user code review while wiring source submission. Fixed by giving every artifact a self-describing `ArtifactManifest` (`.funchole-artifact.json`) written by `NodeRuntimeBuilder` and read by all three artifact-resolution sites, since the Runtime Worker never queries Postgres and can only ever learn this from the artifact bytes themselves. `runtime/node/executor.mjs` now invokes `loadedModule[handler]` instead of a hardcoded `loadedModule.handler`. | Would have silently broken execution for any real function whose entrypoint wasn't literally `index.mjs` exporting `handler`, the instant Build/Deploy got wired to a transport. | F014, F040, F140–F145 |
 | GAP-14 | ~~`FunctionVersionRepository.compareAndSetStatus`'s `@Modifying(clearAutomatically = true)` had no `flushAutomatically = true`, so a pending-but-unflushed write earlier in the same persistence context (e.g. a just-submitted source manifest) could be silently discarded by `clearAutomatically`'s `entityManager.clear()` before it ever reached the database — the bulk UPDATE itself would still succeed, masking the loss.~~ **RESOLVED 2026-09-14** — found while building and testing the real deploy endpoint end-to-end within one transaction (submit source → deploy): the source row vanished with a "no source submitted" error even though it had just been written and confirmed via the API response. Fixed by adding `flushAutomatically = true`. | A submitted source could be silently lost immediately before a deploy attempt in any code path that shares a transaction across both writes. | F037, F040 |
 | GAP-15 | ~~`flow_steps` had a DB-level unique `(flow_version_id, position)` constraint (`uk_flow_steps_version_position`) as the only guard against duplicate step positions, but `FlowStepService.createStep`/`updateStep` never flushed immediately, so the violation surfaced later and unpredictably — as an opaque 500 `DataIntegrityViolationException` whenever Hibernate's next auto-flush happened to occur (in practice: during `adoptVersion`'s own `SELECT`, nowhere near the actual duplicate `createStep` call), instead of a clean 4xx at the point of the real mistake.~~ **RESOLVED 2026-09-14 (STORY-M1-07)** — found while writing a test for adopt-time position-ordering validation: creating two steps at the same position both returned 200, then `adopt` 500'd. Fixed by adding a proactive `FlowStepRepository.findByFlowVersion_IdAndPosition` check in `FlowStepService.createStep`/`updateStep`, so a duplicate position now fails immediately with a clear 422 naming the conflicting step. | A duplicate step position could pass step creation silently and only surface as an unexplained server error at some later, unrelated request. | F078 |
@@ -1161,16 +1161,18 @@ Parallel work is allowed only where it does not change these contracts.
 **User story:** Humans and agents can understand every build and invocation failure
 
 **Tracked features:** F246–F256  
-**Current planning score:** **13.6%**  
+**Current planning score:** **22.7%**  
 **Feature count:** 11  
 **Complete features:** 0/11
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
+**Status:** Runtime logging foundation delivered 2026-09-15 — user `console.log`/`console.error` no longer writes raw text onto the Node executor stdout protocol. The Node bridge converts console output into structured `LOG` protocol messages with `executionId`, stream and redacted message; Java consumes those messages without completing the execution and writes them to Runtime Worker logs. Persistence/query APIs are still open, so this is not yet full observability.
+
 #### Tasks
 
 - [ ] **T01 — Logs**
-  - [ ] function stdout/stderr
+  - [x] function stdout/stderr at runtime protocol boundary
   - [ ] build logs
   - [ ] persistence
   - [ ] query API
@@ -1188,8 +1190,8 @@ Parallel work is allowed only where it does not change these contracts.
 
 | ID | Feature | Status | Priority | Target/Milestone | Score |
 |---|---|---|---|---|---:|
-| F246 | Invocation structured logs | MISSING | P1 | M1 — Human zero-to-running | 0% |
-| F247 | Function stdout/stderr capture | MISSING | P1 | M1 — Human zero-to-running | 0% |
+| F246 | Invocation structured logs | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
+| F247 | Function stdout/stderr capture | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
 | F248 | Logs persisted/queryable | MISSING | P1 | M1 — Human zero-to-running | 0% |
 | F249 | Step-level timing | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
 | F250 | Build logs | MISSING | P1 | M1 — Human zero-to-running | 0% |
@@ -1249,7 +1251,7 @@ Parallel work is allowed only where it does not change these contracts.
 **User story:** Untrusted user code cannot compromise the host or exhaust the platform
 
 **Tracked features:** F269–F282  
-**Current planning score:** **7.1%**  
+**Current planning score:** **10.7%**  
 **Feature count:** 14  
 **Complete features:** 0/14
 
@@ -1268,6 +1270,7 @@ Parallel work is allowed only where it does not change these contracts.
 - [ ] **T03 — API security**
   - [ ] body limits
   - [ ] rate limits
+  - [x] runtime-boundary secret redaction
   - [ ] audit log
 - [ ] **T04 — Scale model**
   - [ ] autoscaling design
@@ -1280,7 +1283,7 @@ Parallel work is allowed only where it does not change these contracts.
 | F270 | Build sandbox/isolation | MISSING | P2 | M5 — Production hardening | 0% |
 | F271 | Runtime execution isolation | MISSING | P2 | M5 — Production hardening | 0% |
 | F272 | Dependency/network restrictions during build | MISSING | P3 | M5 — Production hardening | 0% |
-| F273 | Secret redaction from logs | MISSING | P2 | M5 — Production hardening | 0% |
+| F273 | Secret redaction from logs | PARTIAL | P2 | M5 — Production hardening | 50% |
 | F274 | Request/body size limits | MISSING | P2 | M5 — Production hardening | 0% |
 | F275 | Rate limiting | MISSING | P2 | M5 — Production hardening | 0% |
 | F276 | Audit log | MISSING | P2 | M5 — Production hardening | 0% |
@@ -2276,8 +2279,8 @@ This is the authoritative checklist for this PRD.
 | F243 | Configuration | Non-secret environment variables | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
 | F244 | Networking | Outbound network policy | MISSING | 0% | P2 | M5 — Product hardening |
 | F245 | Networking | Runtime DNS/network access | PARTIAL | 50% | P2 | M5 — Product hardening |
-| F246 | Observability | Invocation structured logs | MISSING | 0% | P1 | M1 — Human zero-to-running |
-| F247 | Observability | Function stdout/stderr capture | MISSING | 0% | P1 | M1 — Human zero-to-running |
+| F246 | Observability | Invocation structured logs | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
+| F247 | Observability | Function stdout/stderr capture | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
 | F248 | Observability | Logs persisted/queryable | MISSING | 0% | P1 | M1 — Human zero-to-running |
 | F249 | Observability | Step-level timing | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
 | F250 | Observability | Build logs | MISSING | 0% | P1 | M1 — Human zero-to-running |
@@ -2303,7 +2306,7 @@ This is the authoritative checklist for this PRD.
 | F270 | Security | Build sandbox/isolation | MISSING | 0% | P2 | M5 — Production hardening |
 | F271 | Security | Runtime execution isolation | MISSING | 0% | P2 | M5 — Production hardening |
 | F272 | Security | Dependency/network restrictions during build | MISSING | 0% | P3 | M5 — Production hardening |
-| F273 | Security | Secret redaction from logs | MISSING | 0% | P2 | M5 — Production hardening |
+| F273 | Security | Secret redaction from logs | PARTIAL | 50% | P2 | M5 — Production hardening |
 | F274 | Security | Request/body size limits | MISSING | 0% | P2 | M5 — Production hardening |
 | F275 | Security | Rate limiting | MISSING | 0% | P2 | M5 — Production hardening |
 | F276 | Security | Audit log | MISSING | 0% | P2 | M5 — Production hardening |
@@ -2419,7 +2422,7 @@ This is the authoritative checklist for this PRD.
 | Multi-tenancy | 1 | 0.0% |
 | Networking | 2 | 25.0% |
 | OSS | 4 | 27.5% |
-| Observability | 11 | 13.6% |
+| Observability | 11 | 22.7% |
 | Platform Ops | 9 | 33.3% |
 | Project Model | 2 | 10.0% |
 | Reliability | 9 | 16.7% |
@@ -2429,7 +2432,7 @@ This is the authoritative checklist for this PRD.
 | Runtime Catalog | 3 | 0.0% |
 | Runtime Registry | 5 | 80.0% |
 | Secrets | 5 | 100.0% |
-| Security | 8 | 0.0% |
+| Security | 8 | 6.2% |
 | Source | 15 | 70.0% |
 | Testing | 10 | 31.0% |
 | Traffic | 3 | 0.0% |
@@ -2444,12 +2447,12 @@ This is the authoritative checklist for this PRD.
 ### Overall
 
 - **350 / 350** master backlog candidates are represented in this PRD.
-- **Current master-backlog implementation score:** **40.4%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4%, EPIC-02 through GAP-12 runtime injection)
-- **Remaining master-backlog scope by score:** **59.6%**
+- **Current master-backlog implementation score:** **40.8%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8%, EPIC-02 through runtime log protocol isolation)
+- **Remaining master-backlog scope by score:** **59.2%**
 - **First human zero-to-running lifecycle score:** **49.9%** *(not yet recalculated — see note below)*
 - **Agent/MCP score:** **1.8%**
 
-> **Note on this update (2026-09-15):** GAP-12's runtime configuration path has now shipped after the initial configuration/secrets foundation. FunctionVersion-scoped non-secret environment variables have a Controlplane API and PostgreSQL persistence (`function_version_env_vars`). Secret values have a Controlplane API that writes the value to OpenBao and persists only the reference in PostgreSQL (`function_version_secrets`). Dispatcher resolves the exact FunctionVersion environment, reads OpenBao secret values, IPC carries the resolved map, and the Node Runtime injects it into `process.env` for artifact execution. This moves F238, F239, F240, F241, F242 and F243 to COMPLETE. Secret redaction, rotation, resource-governance, and logging hardening remain intentionally open, so F273 and related hardening features are not closed by this slice. The master backlog score above and the status counts are recalculated from the F001–F350 table. The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
+> **Note on this update (2026-09-15):** Runtime log protocol isolation has now shipped after GAP-12's runtime configuration path. FunctionVersion-scoped env/secrets still execute through the resolved environment map, and user `console.*` output is now converted into structured `LOG` protocol messages instead of raw stdout text that could corrupt the Node executor protocol. Injected config values are redacted before log emission. This moves F246, F247 and F273 to PARTIAL. Persisted/queryable logs, build logs, rotation, resource-governance, and broader logging hardening remain intentionally open. The master backlog score above and the status counts are recalculated from the F001–F350 table. The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
 
 ### What the percentage does *not* mean
 
