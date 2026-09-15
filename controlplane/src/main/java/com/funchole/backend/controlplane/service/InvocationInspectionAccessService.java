@@ -6,6 +6,7 @@ import com.funchole.backend.core.base.exception.ResourceNotFoundException;
 import com.funchole.backend.invocationcontract.InvocationInspectionHandoff;
 import com.funchole.backend.invocationcontract.InvocationInspectionResult;
 import java.util.UUID;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Ownership-checked read access to one exact Invocation's durable state,
@@ -40,6 +41,15 @@ public class InvocationInspectionAccessService {
         this.functionVersionRepository = functionVersionRepository;
     }
 
+    /**
+     * Read-only, but still needs an open Hibernate session: the
+     * DIRECT_FUNCTION branch below reads a lazily-fetched
+     * {@code FunctionVersion.function} association, which throws
+     * {@code LazyInitializationException} outside a transaction - a real
+     * bug this fix closes, found live (masked in tests only by their own
+     * {@code @Transactional}, which doesn't exist on a real HTTP request).
+     */
+    @Transactional(readOnly = true)
     public InvocationInspectionResult inspect(UUID appUserId, UUID invocationId) {
         InvocationInspectionResult inspection = invocationInspectionHandoff.inspect(invocationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invocation not found: " + invocationId));

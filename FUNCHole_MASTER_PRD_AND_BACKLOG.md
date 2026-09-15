@@ -115,21 +115,21 @@ This document uses a feature-level implementation score:
 
 ### 3.1 Current baseline
 
-**Last recalculated:** 2026-09-15, after runtime log protocol isolation/redaction foundation.
+**Last recalculated:** 2026-09-15, after STORY-M2-02 (Function workspace) shipped.
 
-- **Master backlog completion:** **40.8%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8%, EPIC-02 through runtime log protocol isolation)
+- **Master backlog completion:** **43.4%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4%, EPIC-02 through STORY-M2-02)
 - **First human zero-to-running lifecycle scope:** **49.9%** *(pending full recompute — see §18 note)*
 - **MVP/product-oriented scope:** **39.7%** *(pending full recompute — see §18 note)*
 - **Agent/MCP scope:** **1.8%**
-- **Master backlog remaining:** **59.2%** (was 59.6% pre-runtime log protocol isolation)
+- **Master backlog remaining:** **56.6%** (was 59.2% pre-STORY-M2-02)
 
 Status count across all 350 features:
 
-- **COMPLETE:** 114 (was 110 pre-GAP-12 runtime injection; +F238, +F239, +F240, +F241)
-- **INTERNAL_ONLY:** 7 (unchanged)
-- **PARTIAL:** 48 (was 45; +F246, +F247, +F273)
+- **COMPLETE:** 123 (was 114 pre-STORY-M2-02; +F116, +F117, +F173–F178, +F180)
+- **INTERNAL_ONLY:** 6 (was 7; -F116 moved to COMPLETE)
+- **PARTIAL:** 49 (was 48; +F179 moved from MISSING)
 - **DECISION_REQUIRED:** 7 (unchanged)
-- **MISSING:** 174 (was 177; F246, F247, F273 moved to PARTIAL)
+- **MISSING:** 165 (was 174; F117/F173–F178/F180 moved to COMPLETE, F179 moved to PARTIAL)
 
 ### 3.2 Important interpretation
 
@@ -190,15 +190,16 @@ The execution core is significantly more mature than the end-user product lifecy
 | GAP-04 | ~~Flow FUNCTION steps accept arbitrary UUIDs and do not validate Function/FunctionVersion existence or READY state.~~ **RESOLVED 2026-09-14 (STORY-M1-06)** — `FlowStepService` now validates FUNCTION/RESPONSE/MIDDLEWARE steps against a real, owned, READY `FunctionVersion`, and SUB_FLOW steps against a real, owned, ADOPTED `FlowVersion`. RESPONSE also became genuinely executable (its function's own code now runs on the Runtime Worker to shape `{status, body}`, replacing the old inline `metadata`-driven synthesis), MIDDLEWARE dispatches identically to FUNCTION (label-only for now), and SUB_FLOW is resolved by flattening the referenced flow's steps into the parent's flat step sequence at snapshot-build time (`JdbcInvocationRegistry`) — the Dispatcher, `ExecutionPlanner`, and `invocation_step_executions` schema needed zero changes. Live-verified end-to-end against the real Dispatcher/Runtime Worker (FUNCTION→RESPONSE chaining, and a parent Flow with a SUB_FLOW step whose child flow's step actually executed). | The two working halves of the platform are disconnected. | F066–F068 |
 | GAP-05 | ~~The working /orders demo depends on raw SQL seeded Flow data and prebuilt seeded S3 artifacts.~~ **RESOLVED 2026-09-14 (STORY-M1-08)** — surfaced concretely first (GAP-04's fix made RESPONSE genuinely executable and the demo's RESPONSE step turned out to reference a placeholder that was never a real Function, fixed as a stopgap by pointing it at one real Function created through the API), then fully resolved: `scripts/dev/seed-orders-demo.sh` now provisions GET /orders entirely through the real Controlplane API - 3 real Functions, each with real source submitted and deployed to READY, a real Flow with 3 steps referencing them, adopted - with zero raw SQL. `scripts/dev/seed-flow-routes.sh` no longer seeds `flw_orders_list` at all. Live-verified: hard-deleted the old raw-SQL demo data, ran the new script, confirmed `/orders` still returns 200 with the same shape, confirmed the script is idempotent. | Demo does not prove the real Function→Build→Flow lifecycle. | F107, F307 |
 | GAP-06 | ~~FunctionVersionDeploymentService and FunctionVersionSourceService are not fully wired as live application beans/transports.~~ **RESOLVED 2026-09-14** — both now have real REST transports (`FunctionVersionSourceController`, `FunctionVersionDeploymentController`); `FunctionVersionDeploymentService` is now a live `@Service` bean, backed by a new `ArtifactPublisherConfig` supplying the `ArtifactPublisher` bean it was missing. Verified against the real RustFS, not a fake. | Implemented internals remain unreachable. | F156 |
-| GAP-07 | ~~Direct invocation and invocation inspection exist internally but have no external transport.~~ **PARTIALLY RESOLVED 2026-09-14 (STORY-M1-09)** — invocation inspection (F118/F120) now has a real transport: `GET /api/v1/invocations/{invocationId}` returns durable status/result/error/identity plus full step-level detail, ownership-checked transitively through the owning Flow or FunctionVersion. Required widening the module boundary: a new `InvocationInspectionHandoff` contract in `invocation-contract`, implemented in `dispatcher` (the only module that can see both Invocation-level and step-level durable state), wired onto controlplane's runtime classpath the same way `FunctionVersionInvocationHandoff` already was. Direct FunctionVersion invocation still has no external transport (F116/F117 stay INTERNAL_ONLY/MISSING - out of scope for this story), and there is still no list/filter endpoint (F119 stays MISSING) - only get-by-id. | Blocks test/debug UX. | F116–F120, F167 |
+| GAP-07 | ~~Direct invocation and invocation inspection exist internally but have no external transport.~~ **RESOLVED 2026-09-15** — invocation inspection (F118/F120, STORY-M1-09) has `GET /api/v1/invocations/{invocationId}` (durable status/result/error/identity plus full step-level detail, ownership-checked transitively through the owning Flow or FunctionVersion, via a new `InvocationInspectionHandoff` contract crossing the `invocation-contract`/`dispatcher` boundary). Direct FunctionVersion invocation (F116/F117) now also has a real transport - `POST /api/v1/functions/{functionId}/versions/{versionId}/invoke`, built while wiring STORY-M2-02's "Test invoke" panel, wrapping the already-tested `FunctionVersionInvocationService` - live-verified end-to-end through the Function workspace UI. Only F119 (list/filter invocations) stays MISSING - no story has needed it yet. | Blocks test/debug UX. | F116–F120, F167 |
 | GAP-08 | ~~Unsupported initial component can redeliver forever with Invocation stuck PENDING.~~ **RESOLVED 2026-09-15** — Flow adoption now prevents unsupported/non-terminating executable plans from becoming invocable: step component references are re-validated at adoption, positions must be strictly ascending, and the final step must be terminal (`RESPONSE` or a previously adopted/validated `SUB_FLOW`). Unsupported component types are rejected before dispatch, so the original poison ready-event loop is no longer reachable from adopted Flows. Retry/backoff and broader crash recovery remain separate open work (F133/F134). | Reliability defect. | F132 complete; F133–F134 remain open |
 | GAP-09 | ~~Runtime Registry is static/in-memory and loses capacity state across Dispatcher restarts.~~ **RESOLVED 2026-09-15** — `JdbcRuntimeRegistry` now persists runtime registration/capacity state in PostgreSQL (`runtime_instances`) and Dispatcher uses it by default, with row-level locking (`FOR UPDATE SKIP LOCKED`) for multi-Dispatcher reservation coordination. The old `InMemoryRuntimeRegistry` remains intact as a baseline/opt-in mode. Worker self-registration, heartbeat expiry, distributed leases, orphan reservation reconciliation, and full dispatcher restart replay remain future hardening work. | Production scaling/recovery gap. | F139 complete; F135/F136 partial; F264 partial |
 | GAP-10 | No MCP server, CLI, or agent-facing lifecycle exists. | Blocks agent-first product goal. | F191–F229 |
-| GAP-11 | No Controlplane Web UI exists. | Blocks non-API human product experience. | F173–F190 |
+| GAP-11 | ~~No Controlplane Web UI exists.~~ **PARTIALLY RESOLVED 2026-09-15 (STORY-M2-02)** — the Web shell (F173: auth/session/nav) turned out to already be built and working; the Function workspace (F174–F178, F180) is now built and live-verified end-to-end (create Function → draft version → source editor → deploy to READY → test invoke → inspect the resulting invocation), reusing the shell's existing design system exactly. F179 (build log viewer) is only PARTIAL - deploy failures show their build error transiently in the current session, but nothing is persisted/queryable later, matching the backend's own F044/F045 gap. Flow/Gateway/domain UI (F181–F190) already had substantial pre-existing coverage (a Flow list/detail/React-Flow visual step editor, Gateway/Domain CRUD) not built this session - not audited or touched here, out of scope for STORY-M2-02. | Blocks non-API human product experience. | F173–F190 |
 | GAP-12 | **PARTIALLY RESOLVED 2026-09-15** — FunctionVersion-scoped runtime configuration now exists end-to-end: non-secret env vars are persisted in PostgreSQL, secret values are written to OpenBao, PostgreSQL stores only secret references, Dispatcher resolves the exact FunctionVersion environment, IPC carries the resolved map, and the Node Runtime injects it into `process.env` for artifact execution. Runtime console output is now isolated from the Node executor protocol and emitted as structured, redacted runtime logs. Rotation, persisted/queryable logs, resource governance, and full logging pipeline hardening remain open. | Blocks production readiness. | F238–F282 |
 | GAP-13 | ~~Neither the user-chosen entrypoint file nor the exported handler function name survived past the build step: `ArtifactPublisher.publish()` took no entrypoint parameter, `ArtifactMetadata` had no entrypoint/handler fields, and `LocalArtifactStore`/`S3ArtifactStore`/`FilesystemArtifactCache` all hardcoded `index.mjs` + `loadedModule.handler` — correct only by coincidence, because the two dev-seed artifacts happen to be named and exported that way.~~ **RESOLVED 2026-09-14** — found via user code review while wiring source submission. Fixed by giving every artifact a self-describing `ArtifactManifest` (`.funchole-artifact.json`) written by `NodeRuntimeBuilder` and read by all three artifact-resolution sites, since the Runtime Worker never queries Postgres and can only ever learn this from the artifact bytes themselves. `runtime/node/executor.mjs` now invokes `loadedModule[handler]` instead of a hardcoded `loadedModule.handler`. | Would have silently broken execution for any real function whose entrypoint wasn't literally `index.mjs` exporting `handler`, the instant Build/Deploy got wired to a transport. | F014, F040, F140–F145 |
 | GAP-14 | ~~`FunctionVersionRepository.compareAndSetStatus`'s `@Modifying(clearAutomatically = true)` had no `flushAutomatically = true`, so a pending-but-unflushed write earlier in the same persistence context (e.g. a just-submitted source manifest) could be silently discarded by `clearAutomatically`'s `entityManager.clear()` before it ever reached the database — the bulk UPDATE itself would still succeed, masking the loss.~~ **RESOLVED 2026-09-14** — found while building and testing the real deploy endpoint end-to-end within one transaction (submit source → deploy): the source row vanished with a "no source submitted" error even though it had just been written and confirmed via the API response. Fixed by adding `flushAutomatically = true`. | A submitted source could be silently lost immediately before a deploy attempt in any code path that shares a transaction across both writes. | F037, F040 |
 | GAP-15 | ~~`flow_steps` had a DB-level unique `(flow_version_id, position)` constraint (`uk_flow_steps_version_position`) as the only guard against duplicate step positions, but `FlowStepService.createStep`/`updateStep` never flushed immediately, so the violation surfaced later and unpredictably — as an opaque 500 `DataIntegrityViolationException` whenever Hibernate's next auto-flush happened to occur (in practice: during `adoptVersion`'s own `SELECT`, nowhere near the actual duplicate `createStep` call), instead of a clean 4xx at the point of the real mistake.~~ **RESOLVED 2026-09-14 (STORY-M1-07)** — found while writing a test for adopt-time position-ordering validation: creating two steps at the same position both returned 200, then `adopt` 500'd. Fixed by adding a proactive `FlowStepRepository.findByFlowVersion_IdAndPosition` check in `FlowStepService.createStep`/`updateStep`, so a duplicate position now fails immediately with a clear 422 naming the conflicting step. | A duplicate step position could pass step creation silently and only surface as an unexplained server error at some later, unrelated request. | F078 |
+| GAP-16 | ~~`InvocationInspectionAccessService.inspect()` (STORY-M1-09) wasn't `@Transactional`, so its DIRECT_FUNCTION branch - which reads `FunctionVersion.function`, a lazy `@ManyToOne` association - threw `LazyInitializationException` outside of a transaction. Masked in every test by the test class's own `@Transactional`, which doesn't exist on a real HTTP request.~~ **RESOLVED 2026-09-15** — found live while manually testing the new direct-invoke endpoint end-to-end: `GET /api/v1/invocations/{id}` 500'd for a real DIRECT_FUNCTION invocation despite its own dedicated integration tests all passing. Fixed by adding `@Transactional(readOnly = true)`, matching `FunctionVersionInvocationService.invoke()`'s own convention. | Every DIRECT_FUNCTION invocation inspection was broken in production despite full test coverage - a class of bug this session's `@Transactional`-wrapped test classes cannot catch by construction. | F118 |
 
 ---
 
@@ -696,9 +697,9 @@ Parallel work is allowed only where it does not change these contracts.
 **User story:** Users can run and inspect Flow and direct Function invocations
 
 **Tracked features:** F110–F124  
-**Current planning score:** **57.3%**  
+**Current planning score:** **66.7%**  
 **Feature count:** 15  
-**Complete features:** 8/15
+**Complete features:** 10/15
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
@@ -711,10 +712,10 @@ Parallel work is allowed only where it does not change these contracts.
   - [ ] status
   - [ ] step execution
   - [ ] result/error
-- [ ] **T02 — Expose direct FunctionVersion invocation**
-  - [ ] REST adapter
-  - [ ] READY exact-version validation
-  - [ ] acceptance response
+- [x] **T02 — Expose direct FunctionVersion invocation**
+  - [x] REST adapter *(`POST /api/v1/functions/{functionId}/versions/{versionId}/invoke`)*
+  - [x] READY exact-version validation *(already enforced by the underlying service, surfaces as 409)*
+  - [x] acceptance response *(invocationId/functionVersionId/initialStatus)*
 - [ ] **T03 — Expose inspection**
   - [x] get invocation
   - [ ] list/filter
@@ -736,8 +737,8 @@ Parallel work is allowed only where it does not change these contracts.
 | F113 | Invocation status lifecycle | COMPLETE | P2 | Existing foundation | 100% |
 | F114 | StepExecution persistence | COMPLETE | P2 | Existing foundation | 100% |
 | F115 | Invocation result/error persistence | COMPLETE | P2 | Existing foundation | 100% |
-| F116 | Direct FunctionVersion invocation service | INTERNAL_ONLY | P2 | M1 — Human zero-to-running | 60% |
-| F117 | Direct FunctionVersion invoke API | MISSING | P2 | M1 — Human zero-to-running | 0% |
+| F116 | Direct FunctionVersion invocation service | COMPLETE | P2 | M1 — Human zero-to-running | 100% |
+| F117 | Direct FunctionVersion invoke API | COMPLETE | P2 | M1 — Human zero-to-running | 100% |
 | F118 | Get Invocation | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
 | F119 | List/filter Invocations | MISSING | P1 | M1 — Human zero-to-running | 0% |
 | F120 | Step-by-step execution details | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
@@ -913,16 +914,16 @@ Parallel work is allowed only where it does not change these contracts.
 
 #### Tasks
 
-- [ ] **T01 — Application shell and auth**
-  - [ ] connect to Controlplane API
-  - [ ] session handling
-  - [ ] navigation
-- [ ] **T02 — Function workflow**
-  - [ ] create/list/detail
-  - [ ] version history
-  - [ ] source editor/upload
-  - [ ] deploy/logs
-  - [ ] direct test
+- [x] **T01 — Application shell and auth**
+  - [x] connect to Controlplane API *(already built pre-session - a typed API client with 401 handling)*
+  - [x] session handling *(cookie-based token + server-side route guarding via `proxy.ts`, Next.js 16's renamed `middleware.ts`)*
+  - [x] navigation *(sidebar nav, now including Functions)*
+- [x] **T02 — Function workflow**
+  - [x] create/list/detail
+  - [x] version history
+  - [x] source editor/upload
+  - [x] deploy/logs *(deploy status + transient session-scoped build-error display; no persisted/historical log viewer yet - see F179)*
+  - [x] direct test
 - [ ] **T03 — Flow workflow**
   - [ ] flow/version editor
   - [ ] visual builder
@@ -938,14 +939,14 @@ Parallel work is allowed only where it does not change these contracts.
 
 | ID | Feature | Status | Priority | Target/Milestone | Score |
 |---|---|---|---|---|---:|
-| F173 | Controlplane web application wiring | MISSING | P0 | M2 — Web product | 0% |
-| F174 | Function list/create screen | MISSING | P1 | M2 — Web product | 0% |
-| F175 | Function detail | MISSING | P1 | M2 — Web product | 0% |
-| F176 | FunctionVersion create/history | MISSING | P1 | M2 — Web product | 0% |
-| F177 | Source editor/upload UI | MISSING | P1 | M2 — Web product | 0% |
-| F178 | Build/deploy UI | MISSING | P1 | M2 — Web product | 0% |
-| F179 | Build log viewer | MISSING | P1 | M2 — Web product | 0% |
-| F180 | Function test/invoke panel | MISSING | P1 | M2 — Web product | 0% |
+| F173 | Controlplane web application wiring | COMPLETE | P0 | M2 — Web product | 100% |
+| F174 | Function list/create screen | COMPLETE | P1 | M2 — Web product | 100% |
+| F175 | Function detail | COMPLETE | P1 | M2 — Web product | 100% |
+| F176 | FunctionVersion create/history | COMPLETE | P1 | M2 — Web product | 100% |
+| F177 | Source editor/upload UI | COMPLETE | P1 | M2 — Web product | 100% |
+| F178 | Build/deploy UI | COMPLETE | P1 | M2 — Web product | 100% |
+| F179 | Build log viewer | PARTIAL | P1 | M2 — Web product | 50% |
+| F180 | Function test/invoke panel | COMPLETE | P1 | M2 — Web product | 100% |
 | F181 | Flow list/create | MISSING | P1 | M2 — Web product | 0% |
 | F182 | FlowVersion editor | MISSING | P1 | M2 — Web product | 0% |
 | F183 | Visual Flow builder | MISSING | P1 | M2 — Web product | 0% |
@@ -1812,19 +1813,23 @@ This is the critical path. These stories are intentionally small enough to becom
 
 ## 10. M2 — Controlplane Web stories
 
-### STORY-M2-01 — Web shell
-- [ ] Authentication/session.
-- [ ] API client.
-- [ ] Error handling.
-- [ ] Navigation/resource scoping.
+### STORY-M2-01 — Web shell ✅ ALREADY SHIPPED (verified 2026-09-15)
+- [x] Authentication/session. *(cookie-based token, 401 → redirect)*
+- [x] API client. *(typed, `ApiError` with status/message/details)*
+- [x] Error handling.
+- [x] Navigation/resource scoping. *(sidebar nav + server-side route guarding via `proxy.ts`)*
 
-### STORY-M2-02 — Function workspace
-- [ ] Function create/list/detail.
-- [ ] Version history.
-- [ ] Source upload/editor.
-- [ ] Deploy status.
-- [ ] Build logs.
-- [ ] Direct test invocation.
+**Note:** found already fully built and live-verified working (login → dashboard → real data) when scoping STORY-M2-02 - not built this session, but confirmed done.
+
+### STORY-M2-02 — Function workspace ✅ SHIPPED 2026-09-15
+- [x] Function create/list/detail.
+- [x] Version history.
+- [x] Source upload/editor.
+- [x] Deploy status.
+- [x] Build logs. *(transient, session-scoped only - see F179; no persisted/historical log storage exists on the backend yet)*
+- [x] Direct test invocation. *(required also building the missing `POST .../invoke` REST endpoint - F116/F117 - since the backend service existed but was never exposed; closes GAP-07 fully)*
+
+**Done when:** a user can create a Function, submit source, deploy it to READY, and directly test-invoke it, entirely through the UI. **Verified live**, including dark mode: created a real Function → draft version → submitted source via the editor → deployed to a real READY artifact → ran a direct test invocation → inspected its durable status via the STORY-M1-09 endpoint. Found and fixed two real bugs along the way: a `LazyInitializationException` in the already-shipped Invocation Inspection endpoint (GAP-16, never caught by its own tests since they're `@Transactional` and a real request isn't), and a source-editor render race where the editor didn't wait for its initial fetch to resolve before deciding whether to show itself.
 
 ### STORY-M2-03 — Flow builder
 - [ ] Flow/FlowVersion editor.
@@ -2149,8 +2154,8 @@ This is the authoritative checklist for this PRD.
 | F113 | Invocation | Invocation status lifecycle | COMPLETE | 100% | P2 | Existing foundation |
 | F114 | Invocation | StepExecution persistence | COMPLETE | 100% | P2 | Existing foundation |
 | F115 | Invocation | Invocation result/error persistence | COMPLETE | 100% | P2 | Existing foundation |
-| F116 | Invocation | Direct FunctionVersion invocation service | INTERNAL_ONLY | 60% | P2 | M1 — Human zero-to-running |
-| F117 | Invocation | Direct FunctionVersion invoke API | MISSING | 0% | P2 | M1 — Human zero-to-running |
+| F116 | Invocation | Direct FunctionVersion invocation service | COMPLETE | 100% | P2 | M1 — Human zero-to-running |
+| F117 | Invocation | Direct FunctionVersion invoke API | COMPLETE | 100% | P2 | M1 — Human zero-to-running |
 | F118 | Invocation | Get Invocation | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
 | F119 | Invocation | List/filter Invocations | MISSING | 0% | P1 | M1 — Human zero-to-running |
 | F120 | Invocation | Step-by-step execution details | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
@@ -2206,14 +2211,14 @@ This is the authoritative checklist for this PRD.
 | F170 | Controlplane API | Pagination/filtering conventions | MISSING | 0% | P2 | M1 — Human zero-to-running |
 | F171 | Controlplane API | API versioning strategy | PARTIAL | 50% | P2 | M1 — Human zero-to-running |
 | F172 | Controlplane API | OpenAPI specification | MISSING | 0% | P2 | M1 — Human zero-to-running |
-| F173 | Web UI | Controlplane web application wiring | MISSING | 0% | P0 | M2 — Web product |
-| F174 | Web UI | Function list/create screen | MISSING | 0% | P1 | M2 — Web product |
-| F175 | Web UI | Function detail | MISSING | 0% | P1 | M2 — Web product |
-| F176 | Web UI | FunctionVersion create/history | MISSING | 0% | P1 | M2 — Web product |
-| F177 | Web UI | Source editor/upload UI | MISSING | 0% | P1 | M2 — Web product |
-| F178 | Web UI | Build/deploy UI | MISSING | 0% | P1 | M2 — Web product |
-| F179 | Web UI | Build log viewer | MISSING | 0% | P1 | M2 — Web product |
-| F180 | Web UI | Function test/invoke panel | MISSING | 0% | P1 | M2 — Web product |
+| F173 | Web UI | Controlplane web application wiring | COMPLETE | 100% | P0 | M2 — Web product |
+| F174 | Web UI | Function list/create screen | COMPLETE | 100% | P1 | M2 — Web product |
+| F175 | Web UI | Function detail | COMPLETE | 100% | P1 | M2 — Web product |
+| F176 | Web UI | FunctionVersion create/history | COMPLETE | 100% | P1 | M2 — Web product |
+| F177 | Web UI | Source editor/upload UI | COMPLETE | 100% | P1 | M2 — Web product |
+| F178 | Web UI | Build/deploy UI | COMPLETE | 100% | P1 | M2 — Web product |
+| F179 | Web UI | Build log viewer | PARTIAL | 50% | P1 | M2 — Web product |
+| F180 | Web UI | Function test/invoke panel | COMPLETE | 100% | P1 | M2 — Web product |
 | F181 | Web UI | Flow list/create | MISSING | 0% | P1 | M2 — Web product |
 | F182 | Web UI | FlowVersion editor | MISSING | 0% | P1 | M2 — Web product |
 | F183 | Web UI | Visual Flow builder | MISSING | 0% | P1 | M2 — Web product |
@@ -2447,12 +2452,12 @@ This is the authoritative checklist for this PRD.
 ### Overall
 
 - **350 / 350** master backlog candidates are represented in this PRD.
-- **Current master-backlog implementation score:** **40.8%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8%, EPIC-02 through runtime log protocol isolation)
-- **Remaining master-backlog scope by score:** **59.2%**
+- **Current master-backlog implementation score:** **43.4%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4%, EPIC-02 through STORY-M2-02)
+- **Remaining master-backlog scope by score:** **56.6%**
 - **First human zero-to-running lifecycle score:** **49.9%** *(not yet recalculated — see note below)*
 - **Agent/MCP score:** **1.8%**
 
-> **Note on this update (2026-09-15):** Runtime log protocol isolation has now shipped after GAP-12's runtime configuration path. FunctionVersion-scoped env/secrets still execute through the resolved environment map, and user `console.*` output is now converted into structured `LOG` protocol messages instead of raw stdout text that could corrupt the Node executor protocol. Injected config values are redacted before log emission. This moves F246, F247 and F273 to PARTIAL. Persisted/queryable logs, build logs, rotation, resource-governance, and broader logging hardening remain intentionally open. The master backlog score above and the status counts are recalculated from the F001–F350 table. The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
+> **Note on this update (2026-09-15):** M1 is fully shipped (all 10 stories), and M2 (Controlplane Web) has now started with **STORY-M2-02 (Function workspace)**. Scoping it first surfaced that STORY-M2-01 (Web shell) was already built and working - not by this session, but verified live (login, session, typed API client, nav) - so the story list reflects that as already done rather than reopening it. The Function workspace itself (`/functions`, `/functions/[id]`, `/functions/[id]/versions/[id]`) is now built and live-verified end-to-end: create Function → draft version → source editor (upload or paste-and-edit) → deploy to a real READY artifact → direct test invocation → inspect the resulting invocation via STORY-M1-09's endpoint - reusing the shell's existing design system/components exactly, in both light and dark mode. This closed **F173–F178, F180** and, as a necessary side effect, **F116/F117** (direct invocation had a tested service but no REST transport until now - resolves **GAP-07** fully) via a new `POST /api/v1/functions/{functionId}/versions/{versionId}/invoke`. **F179** (build log viewer) is only PARTIAL - deploy failures show their build error transiently in the session that triggered them, nothing persisted/queryable, matching the backend's own F044/F045 gap. Two real bugs were found and fixed live, not part of any story's original scope: **GAP-16** (`InvocationInspectionAccessService.inspect()` threw `LazyInitializationException` on a real HTTP request despite its own test suite passing, since those tests are `@Transactional` and a real request isn't - fixed by adding the same annotation), and a frontend source-editor race (it decided whether to show itself before its initial fetch had resolved, so it always opened at least once regardless of whether source already existed - fixed by gating that decision on the fetch settling). F181–F190 (Flow/Gateway/domain UI) were found to already have substantial pre-existing coverage, not audited or touched here - out of scope for this story. The master backlog score above and the status counts are recalculated from the F001–F350 table (verified by parsing it programmatically). The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
 
 ### What the percentage does *not* mean
 

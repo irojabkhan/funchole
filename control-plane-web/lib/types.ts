@@ -8,7 +8,11 @@ export type CertificateStatus = "PENDING" | "ACTIVE" | "FAILED" | "EXPIRED";
 
 export type FlowVersionStatus = "DRAFT" | "ADOPTED" | "ARCHIVED";
 
-export type FlowStepComponentType = "FUNCTION" | "RESPONSE";
+export type FlowStepComponentType = "FUNCTION" | "RESPONSE" | "MIDDLEWARE" | "SUB_FLOW";
+
+export type FunctionVersionStatus = "DRAFT" | "PUBLISHING" | "READY" | "FAILED";
+
+export type InvocationStatus = "PENDING" | "COMPLETED" | "FAILED";
 
 export interface AuthTokenResponse {
   accessToken: string;
@@ -150,6 +154,97 @@ export interface FlowVersionResponse {
 export interface FlowVersionCreateRequest {
   runtime?: string | null;
   metadata?: string | null;
+}
+
+export interface FunctionResponse {
+  id: string;
+  functionKey: string;
+  name: string;
+  description: string | null;
+  runtime: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunctionCreateRequest {
+  functionKey: string;
+  name: string;
+  description?: string | null;
+  runtime?: string | null;
+}
+
+export interface FunctionUpdateRequest {
+  name: string;
+  description?: string | null;
+  runtime?: string | null;
+}
+
+export interface FunctionVersionResponse {
+  id: string;
+  functionId: string;
+  version: number;
+  status: FunctionVersionStatus;
+  runtime: string;
+  artifactObjectKey: string | null;
+  artifactFormat: string | null;
+  artifactSha256: string | null;
+  artifactSizeBytes: number | null;
+  artifactPublishedAt: string | null;
+  metadata: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunctionVersionCreateRequest {
+  runtime?: string | null;
+  metadata?: string | null;
+}
+
+export interface FunctionVersionSourceResponse {
+  functionVersionId: string;
+  runtimeType: string;
+  runtimeVersion: string | null;
+  entrypoint: string;
+  handler: string;
+  relativePaths: string[];
+}
+
+export interface DirectInvocationResponse {
+  invocationId: string;
+  functionVersionId: string;
+  initialStatus: string;
+}
+
+export interface InvocationStepInspectionResponse {
+  stepId: string;
+  position: number;
+  componentType: string;
+  componentId: string;
+  componentVersionId: string;
+  status: string;
+  attempt: number;
+  result: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface InvocationInspectionResponse {
+  invocationId: string;
+  status: InvocationStatus;
+  flowId: string | null;
+  flowKey: string | null;
+  flowVersionId: string | null;
+  functionVersionId: string | null;
+  inputPayload: string | null;
+  result: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  steps: InvocationStepInspectionResponse[];
 }
 
 export interface PaginationResponse<T> {

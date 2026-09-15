@@ -3,6 +3,7 @@ import type {
   ApiErrorResponse,
   ApiResponse,
   AuthTokenResponse,
+  DirectInvocationResponse,
   DomainCreateRequest,
   DomainResponse,
   FlowCreateRequest,
@@ -13,9 +14,16 @@ import type {
   FlowUpdateRequest,
   FlowVersionCreateRequest,
   FlowVersionResponse,
+  FunctionCreateRequest,
+  FunctionResponse,
+  FunctionUpdateRequest,
+  FunctionVersionCreateRequest,
+  FunctionVersionResponse,
+  FunctionVersionSourceResponse,
   GatewayCreateRequest,
   GatewayResponse,
   GatewayUpdateRequest,
+  InvocationInspectionResponse,
   PaginationResponse,
   ProfileRequest,
   ProfileResponse,
@@ -39,7 +47,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
-  if (init.body !== undefined) {
+  if (init.body !== undefined && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
@@ -215,5 +223,90 @@ export const api = {
     return request(`/api/v1/flows/${flowId}/versions/${versionId}/steps/${stepId}`, {
       method: "DELETE",
     });
+  },
+
+  listFunctions(page: number, size: number): Promise<PaginationResponse<FunctionResponse>> {
+    return request(`/api/v1/functions?page=${page}&size=${size}`);
+  },
+
+  getFunction(id: string): Promise<FunctionResponse> {
+    return request(`/api/v1/functions/${id}`);
+  },
+
+  createFunction(payload: FunctionCreateRequest): Promise<FunctionResponse> {
+    return request("/api/v1/functions", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  updateFunction(id: string, payload: FunctionUpdateRequest): Promise<FunctionResponse> {
+    return request(`/api/v1/functions/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+  },
+
+  deleteFunction(id: string): Promise<Record<string, string>> {
+    return request(`/api/v1/functions/${id}`, { method: "DELETE" });
+  },
+
+  listFunctionVersions(
+    functionId: string,
+    page: number,
+    size: number
+  ): Promise<PaginationResponse<FunctionVersionResponse>> {
+    return request(`/api/v1/functions/${functionId}/versions?page=${page}&size=${size}`);
+  },
+
+  getFunctionVersion(functionId: string, versionId: string): Promise<FunctionVersionResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}`);
+  },
+
+  createFunctionVersion(
+    functionId: string,
+    payload: FunctionVersionCreateRequest
+  ): Promise<FunctionVersionResponse> {
+    return request(`/api/v1/functions/${functionId}/versions`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getFunctionVersionSource(
+    functionId: string,
+    versionId: string
+  ): Promise<FunctionVersionSourceResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/source`);
+  },
+
+  submitFunctionVersionSource(
+    functionId: string,
+    versionId: string,
+    file: File,
+    entrypoint: string,
+    handler: string
+  ): Promise<FunctionVersionSourceResponse> {
+    const form = new FormData();
+    form.append("files", file, file.name);
+    form.append("entrypoint", entrypoint);
+    form.append("handler", handler);
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/source`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  deployFunctionVersion(functionId: string, versionId: string): Promise<FunctionVersionResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/deploy`, { method: "POST" });
+  },
+
+  invokeFunctionVersion(
+    functionId: string,
+    versionId: string,
+    inputPayload: string
+  ): Promise<DirectInvocationResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/invoke`, {
+      method: "POST",
+      body: inputPayload,
+    });
+  },
+
+  getInvocation(invocationId: string): Promise<InvocationInspectionResponse> {
+    return request(`/api/v1/invocations/${invocationId}`);
   },
 };

@@ -6,10 +6,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { clearToken } from "@/lib/auth";
 import type { ProfileResponse } from "@/lib/types";
-import { GridIcon, WorkflowIcon, ServerIcon, GlobeIcon, LogOutIcon } from "@/components/icons";
+import { GridIcon, FunctionIcon, WorkflowIcon, ServerIcon, GlobeIcon, LogOutIcon } from "@/components/icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: GridIcon },
+  { href: "/functions", label: "Functions", icon: FunctionIcon },
   { href: "/flows", label: "Flows", icon: WorkflowIcon },
   { href: "/gateways", label: "Gateways", icon: ServerIcon },
   { href: "/domains", label: "Domains", icon: GlobeIcon },

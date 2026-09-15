@@ -49,6 +49,16 @@ const COMPONENT_META: Record<FlowStepComponentType, { badge: string; dot: string
     dot: "bg-violet-500",
     label: "Response",
   },
+  MIDDLEWARE: {
+    badge: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+    dot: "bg-amber-500",
+    label: "Middleware",
+  },
+  SUB_FLOW: {
+    badge: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+    dot: "bg-emerald-500",
+    label: "Sub-flow",
+  },
 };
 
 const PALETTE_ITEMS: { type: FlowStepComponentType; title: string; description: string }[] = [

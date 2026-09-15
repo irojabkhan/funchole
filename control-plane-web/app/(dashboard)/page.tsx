@@ -5,13 +5,14 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { ProfileResponse } from "@/lib/types";
 import { Panel } from "@/components/Panel";
-import { WorkflowIcon, ServerIcon, GlobeIcon } from "@/components/icons";
+import { FunctionIcon, WorkflowIcon, ServerIcon, GlobeIcon } from "@/components/icons";
 
 export default function OverviewPage() {
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [domainCount, setDomainCount] = useState<number | null>(null);
   const [gatewayCount, setGatewayCount] = useState<number | null>(null);
   const [flowCount, setFlowCount] = useState<number | null>(null);
+  const [functionCount, setFunctionCount] = useState<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -28,12 +29,17 @@ export default function OverviewPage() {
       .listFlows(1, 1)
       .then((r) => active && setFlowCount(r.totalElements))
       .catch(() => {});
+    api
+      .listFunctions(1, 1)
+      .then((r) => active && setFunctionCount(r.totalElements))
+      .catch(() => {});
     return () => {
       active = false;
     };
   }, []);
 
   const cards = [
+    { href: "/functions", label: "Functions", value: functionCount, icon: FunctionIcon, accent: "text-amber-600 dark:text-amber-400" },
     { href: "/flows", label: "Flows", value: flowCount, icon: WorkflowIcon, accent: "text-cyan-600 dark:text-cyan-400" },
     { href: "/gateways", label: "Gateways", value: gatewayCount, icon: ServerIcon, accent: "text-violet-600 dark:text-violet-400" },
     { href: "/domains", label: "Domains", value: domainCount, icon: GlobeIcon, accent: "text-emerald-600 dark:text-emerald-400" },
@@ -45,10 +51,10 @@ export default function OverviewPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">
           Welcome{profile ? `, ${profile.username}` : ""}
         </h1>
-        <p className="mt-1 text-sm text-muted">Manage your flows, gateways, and domains from here.</p>
+        <p className="mt-1 text-sm text-muted">Manage your functions, flows, gateways, and domains from here.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
