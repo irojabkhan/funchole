@@ -1,0 +1,10 @@
+CREATE TABLE runtime_instances (
+    runtime_instance_id VARCHAR(150) PRIMARY KEY,
+    runtime_type VARCHAR(100) NOT NULL,
+    status VARCHAR(100) NOT NULL,
+    capacity INTEGER NOT NULL,
+    in_flight INTEGER NOT NULL DEFAULT 0,
+    socket_path VARCHAR(2048) NOT NULL,
+    registered_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

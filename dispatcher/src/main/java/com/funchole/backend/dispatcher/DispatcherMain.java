@@ -4,6 +4,7 @@ import com.funchole.backend.invocation.InvocationMessagingConfig;
 import com.funchole.backend.invocation.JdbcInvocationRegistry;
 import com.funchole.backend.invocation.NatsJetStreamInvocationEventPublisher;
 import com.funchole.backend.runtimeregistry.InMemoryRuntimeRegistry;
+import com.funchole.backend.runtimeregistry.JdbcRuntimeRegistry;
 import com.funchole.backend.runtimeregistry.RuntimeInstance;
 import com.funchole.backend.runtimeregistry.RuntimeInstanceStatus;
 import com.funchole.backend.runtimeregistry.RuntimeRegistry;
@@ -32,7 +33,7 @@ public final class DispatcherMain {
                 natsConnection,
                 new JdbcInvocationRegistry(dataSource, new NatsJetStreamInvocationEventPublisher(natsConnection)),
                 new JdbcInvocationStepExecutionRegistry(dataSource),
-                createRuntimeRegistry(),
+                createRuntimeRegistry(dataSource),
                 new ExecutionPlanner(),
                 executionGateway
         );
@@ -63,8 +64,10 @@ public final class DispatcherMain {
         }
     }
 
-    private static RuntimeRegistry createRuntimeRegistry() {
-        InMemoryRuntimeRegistry runtimeRegistry = new InMemoryRuntimeRegistry();
+    private static RuntimeRegistry createRuntimeRegistry(DataSource dataSource) {
+        RuntimeRegistry runtimeRegistry = "memory".equalsIgnoreCase(readString("RUNTIME_REGISTRY_TYPE", "jdbc"))
+                ? new InMemoryRuntimeRegistry()
+                : new JdbcRuntimeRegistry(dataSource);
         runtimeRegistry.register(new RuntimeInstance(
                 readString("DEV_RUNTIME_INSTANCE_ID", "runtime-node-dev-1"),
                 readString("DEV_RUNTIME_TYPE", "NODE"),
