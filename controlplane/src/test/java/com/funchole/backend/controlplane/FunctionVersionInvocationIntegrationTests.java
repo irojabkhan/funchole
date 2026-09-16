@@ -1,5 +1,7 @@
 package com.funchole.backend.controlplane;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -8,6 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -68,6 +74,51 @@ class FunctionVersionInvocationIntegrationTests {
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.invocationId").isNotEmpty());
+    }
+
+    @Test
+    void persistsAndSurfacesRuntimeConsoleOutputThroughInspection() throws Exception {
+        String versionId = createReadyVersion("""
+                export async function handler(input) {
+                  console.log("hello from the function");
+                  console.error("a warning");
+                  return { echoed: input };
+                }
+                """);
+
+        MvcResult invokeResult = mockMvc.perform(post("/api/v1/functions/{functionId}/versions/{versionId}/invoke", functionId, versionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String invocationId = JsonPath.read(invokeResult.getResponse().getContentAsString(), "$.data.invocationId");
+
+        Map<String, Object> inspection = pollUntilTerminal(invocationId);
+
+        assertThat(inspection.get("status")).isEqualTo("COMPLETED");
+        List<Map<String, Object>> steps = (List<Map<String, Object>>) inspection.get("steps");
+        assertThat(steps).hasSize(1);
+        List<Map<String, Object>> logs = (List<Map<String, Object>>) steps.get(0).get("logs");
+        assertThat(logs)
+                .extracting(log -> log.get("stream") + ":" + log.get("message"))
+                .contains("stdout:hello from the function", "stderr:a warning");
+    }
+
+    private Map<String, Object> pollUntilTerminal(String invocationId) throws Exception {
+        Instant deadline = Instant.now().plusSeconds(10);
+        while (Instant.now().isBefore(deadline)) {
+            MvcResult result = mockMvc.perform(get("/api/v1/invocations/{invocationId}", invocationId)
+                            .header("Authorization", "Bearer " + adminToken))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            Map<String, Object> data = JsonPath.read(result.getResponse().getContentAsString(), "$.data");
+            if (!"PENDING".equals(data.get("status"))) {
+                return data;
+            }
+            Thread.sleep(200);
+        }
+        throw new AssertionError("Invocation " + invocationId + " did not reach a terminal status within the deadline");
     }
 
     @Test

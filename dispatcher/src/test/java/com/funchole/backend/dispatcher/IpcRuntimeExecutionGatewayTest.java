@@ -107,12 +107,31 @@ class IpcRuntimeExecutionGatewayTest {
     }
 
     @Test
+    void deliversEveryLogMessageToTheOnLogCallbackBeforeTerminalCompletion() throws Exception {
+        worker = FakeIpcWorker.start();
+        worker.behave(FakeIpcWorker.Behavior.ACCEPT_WITH_LOGS);
+        gateway = new IpcRuntimeExecutionGateway(Duration.ofSeconds(2));
+        RuntimeExecutionRequest request = validRequest();
+        java.util.List<RuntimeLogEntry> received = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        RuntimeExecutionHandle handle = gateway.handoff(target(worker.socketPath()), request, received::add);
+        handle.completion().toCompletableFuture().get(2, java.util.concurrent.TimeUnit.SECONDS);
+
+        assertEquals(2, received.size());
+        assertEquals("stdout", received.get(0).stream());
+        assertEquals("hello from the function", received.get(0).message());
+        assertEquals("stderr", received.get(1).stream());
+        assertEquals("a warning", received.get(1).message());
+        assertTrue(received.stream().allMatch(entry -> entry.executionId().equals(request.executionId())));
+    }
+
+    @Test
     void handsOffAndReceivesMatchingAcceptance() throws Exception {
         worker = FakeIpcWorker.start();
         gateway = new IpcRuntimeExecutionGateway(Duration.ofSeconds(2));
         RuntimeExecutionRequest request = validRequest();
 
-        RuntimeExecutionHandle handle = gateway.handoff(target(worker.socketPath()), request);
+        RuntimeExecutionHandle handle = gateway.handoff(target(worker.socketPath()), request, entry -> { });
         RuntimeExecutionAcceptance acceptance = handle.acceptance();
 
         assertTrue(acceptance.accepted());
@@ -128,8 +147,8 @@ class IpcRuntimeExecutionGatewayTest {
         gateway = new IpcRuntimeExecutionGateway(Duration.ofSeconds(2));
         RuntimeTarget target = target(worker.socketPath());
 
-        gateway.handoff(target, validRequest());
-        gateway.handoff(target, validRequest());
+        gateway.handoff(target, validRequest(), entry -> { });
+        gateway.handoff(target, validRequest(), entry -> { });
 
         assertEquals(2, worker.receivedExecutionIds().size());
         assertEquals(1, worker.acceptedConnectionCount());
@@ -157,12 +176,12 @@ class IpcRuntimeExecutionGatewayTest {
             Future<RuntimeExecutionAcceptance> futureA = clientExecutor.submit(() -> {
                 bothStarted.countDown();
                 bothStarted.await();
-                return gateway.handoff(target, requestA).acceptance();
+                return gateway.handoff(target, requestA, entry -> { }).acceptance();
             });
             Future<RuntimeExecutionAcceptance> futureB = clientExecutor.submit(() -> {
                 bothStarted.countDown();
                 bothStarted.await();
-                return gateway.handoff(target, requestB).acceptance();
+                return gateway.handoff(target, requestB, entry -> { }).acceptance();
             });
 
             RuntimeExecutionAcceptance acceptanceA = futureA.get(10, java.util.concurrent.TimeUnit.SECONDS);
@@ -185,7 +204,7 @@ class IpcRuntimeExecutionGatewayTest {
         gateway = new IpcRuntimeExecutionGateway(Duration.ofSeconds(1));
         RuntimeTarget target = new RuntimeTarget("runtime-node-missing", "NODE", "/tmp/fh-does-not-exist.sock");
 
-        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target, validRequest()));
+        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target, validRequest(), entry -> { }));
     }
 
     @Test
@@ -195,7 +214,7 @@ class IpcRuntimeExecutionGatewayTest {
         gateway = new IpcRuntimeExecutionGateway(Duration.ofMillis(300));
         RuntimeExecutionRequest request = validRequest();
 
-        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target(worker.socketPath()), request));
+        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target(worker.socketPath()), request, entry -> { }));
         assertEquals(0, gateway.pendingAcceptanceCount(worker.socketPath()));
         assertEquals(0, gateway.pendingCompletionCount(worker.socketPath()));
     }
@@ -206,7 +225,7 @@ class IpcRuntimeExecutionGatewayTest {
         worker.behave(FakeIpcWorker.Behavior.WRONG_EXECUTION_ID);
         gateway = new IpcRuntimeExecutionGateway(Duration.ofMillis(300));
 
-        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target(worker.socketPath()), validRequest()));
+        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target(worker.socketPath()), validRequest(), entry -> { }));
     }
 
     @Test
@@ -215,7 +234,7 @@ class IpcRuntimeExecutionGatewayTest {
         worker.behave(FakeIpcWorker.Behavior.CLOSE_IMMEDIATELY);
         gateway = new IpcRuntimeExecutionGateway(Duration.ofSeconds(2));
 
-        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target(worker.socketPath()), validRequest()));
+        assertThrows(RuntimeIpcException.class, () -> gateway.handoff(target(worker.socketPath()), validRequest(), entry -> { }));
     }
 
     private void respondToTwoRequestsInReverseOrder(ServerSocketChannel serverChannel) throws IOException {

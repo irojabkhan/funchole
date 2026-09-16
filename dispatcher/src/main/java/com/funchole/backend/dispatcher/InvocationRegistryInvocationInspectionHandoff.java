@@ -5,6 +5,7 @@ import com.funchole.backend.invocation.InvocationInspectionService;
 import com.funchole.backend.invocationcontract.InvocationInspectionHandoff;
 import com.funchole.backend.invocationcontract.InvocationInspectionResult;
 import com.funchole.backend.invocationcontract.InvocationStepInspectionResult;
+import com.funchole.backend.invocationcontract.InvocationStepLogEntry;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,13 +28,16 @@ final class InvocationRegistryInvocationInspectionHandoff implements InvocationI
 
     private final InvocationInspectionService invocationInspectionService;
     private final InvocationStepExecutionRegistry invocationStepExecutionRegistry;
+    private final InvocationStepExecutionLogRegistry invocationStepExecutionLogRegistry;
 
     InvocationRegistryInvocationInspectionHandoff(
             InvocationInspectionService invocationInspectionService,
-            InvocationStepExecutionRegistry invocationStepExecutionRegistry
+            InvocationStepExecutionRegistry invocationStepExecutionRegistry,
+            InvocationStepExecutionLogRegistry invocationStepExecutionLogRegistry
     ) {
         this.invocationInspectionService = invocationInspectionService;
         this.invocationStepExecutionRegistry = invocationStepExecutionRegistry;
+        this.invocationStepExecutionLogRegistry = invocationStepExecutionLogRegistry;
     }
 
     @Override
@@ -69,6 +73,11 @@ final class InvocationRegistryInvocationInspectionHandoff implements InvocationI
     }
 
     private InvocationStepInspectionResult toStepResult(InvocationStepExecution execution) {
+        List<InvocationStepLogEntry> logs = invocationStepExecutionLogRegistry
+                .findAllByStepExecutionId(execution.id())
+                .stream()
+                .map(log -> new InvocationStepLogEntry(log.stream(), log.message(), log.createdAt()))
+                .toList();
         return new InvocationStepInspectionResult(
                 execution.stepId(),
                 execution.position(),
@@ -82,7 +91,8 @@ final class InvocationRegistryInvocationInspectionHandoff implements InvocationI
                 execution.createdAt(),
                 execution.updatedAt(),
                 execution.startedAt(),
-                execution.completedAt()
+                execution.completedAt(),
+                logs
         );
     }
 }

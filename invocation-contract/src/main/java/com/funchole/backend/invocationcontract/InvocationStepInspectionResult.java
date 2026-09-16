@@ -1,6 +1,7 @@
 package com.funchole.backend.invocationcontract;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -23,6 +24,7 @@ public record InvocationStepInspectionResult(
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt,
         OffsetDateTime startedAt,
-        OffsetDateTime completedAt
+        OffsetDateTime completedAt,
+        List<InvocationStepLogEntry> logs
 ) {
 }

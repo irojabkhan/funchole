@@ -1,9 +1,14 @@
 package com.funchole.backend.invocation;
 
+import com.funchole.backend.invocationcontract.FlowInvocationHandoff;
 import com.funchole.backend.invocationcontract.FunctionVersionInvocationHandoff;
+import io.nats.client.Connection;
+import io.nats.client.Nats;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 
 /**
  * Registers the concrete Invocation-side implementation of
@@ -20,24 +25,43 @@ import org.springframework.context.annotation.Configuration;
  * not {@code implementation}) finds this configuration and wires the real
  * adapter automatically.
  *
- * <p>Uses a {@link NoopInvocationEventPublisher} (the same default
- * {@link JdbcInvocationRegistry}'s single-arg constructor already applies) -
- * real NATS-backed ready-event publication from this entry point is a
- * separate, deliberately out-of-scope follow-up; direct invocations created
- * here are durably persisted and inspectable immediately, but are not yet
- * picked up by the Dispatcher.
+ * <p>Wires a real {@link NatsJetStreamInvocationEventPublisher} (GAP-17) so
+ * direct FunctionVersion invocations are actually picked up and executed by
+ * the Dispatcher, exactly like Gateway-triggered Flow invocations. The
+ * connection and the publisher are both {@link Lazy}: this configuration
+ * loads into every controlplane Spring context (most of the test suite
+ * included), but a real NATS connection is only opened the first time a
+ * direct invocation is actually created - every other context never touches
+ * NATS at all.
  */
 @Configuration
 public class InvocationHandoffConfig {
 
     @Bean
-    InvocationRegistry invocationRegistry(DataSource dataSource) {
-        return new JdbcInvocationRegistry(dataSource);
+    @Lazy
+    Connection invocationNatsConnection(@Value("${app.nats.url:nats://localhost:4222}") String natsUrl) throws Exception {
+        return Nats.connect(natsUrl);
+    }
+
+    @Bean
+    @Lazy
+    InvocationEventPublisher invocationEventPublisher(Connection invocationNatsConnection) {
+        return new NatsJetStreamInvocationEventPublisher(invocationNatsConnection);
+    }
+
+    @Bean
+    InvocationRegistry invocationRegistry(DataSource dataSource, InvocationEventPublisher invocationEventPublisher) {
+        return new JdbcInvocationRegistry(dataSource, invocationEventPublisher);
     }
 
     @Bean
     FunctionVersionInvocationHandoff functionVersionInvocationHandoff(InvocationRegistry invocationRegistry) {
         return new InvocationRegistryFunctionVersionInvocationHandoff(invocationRegistry);
+    }
+
+    @Bean
+    FlowInvocationHandoff flowInvocationHandoff(InvocationRegistry invocationRegistry) {
+        return new InvocationRegistryFlowInvocationHandoff(invocationRegistry);
     }
 
     @Bean

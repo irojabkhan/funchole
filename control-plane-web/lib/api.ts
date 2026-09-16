@@ -3,6 +3,7 @@ import type {
   ApiErrorResponse,
   ApiResponse,
   AuthTokenResponse,
+  DirectFlowInvocationResponse,
   DirectInvocationResponse,
   DomainCreateRequest,
   DomainResponse,
@@ -17,7 +18,9 @@ import type {
   FunctionCreateRequest,
   FunctionResponse,
   FunctionUpdateRequest,
+  FunctionVersionConfigResponse,
   FunctionVersionCreateRequest,
+  FunctionVersionFullSourceResponse,
   FunctionVersionResponse,
   FunctionVersionSourceResponse,
   GatewayCreateRequest,
@@ -192,6 +195,17 @@ export const api = {
     return request(`/api/v1/flows/${flowId}/versions/${versionId}`, { method: "DELETE" });
   },
 
+  invokeFlowVersion(
+    flowId: string,
+    versionId: string,
+    inputPayload: string
+  ): Promise<DirectFlowInvocationResponse> {
+    return request(`/api/v1/flows/${flowId}/versions/${versionId}/invoke`, {
+      method: "POST",
+      body: inputPayload,
+    });
+  },
+
   listFlowSteps(flowId: string, versionId: string): Promise<FlowStepResponse[]> {
     return request(`/api/v1/flows/${flowId}/versions/${versionId}/steps`);
   },
@@ -274,15 +288,24 @@ export const api = {
     return request(`/api/v1/functions/${functionId}/versions/${versionId}/source`);
   },
 
+  getFunctionVersionSourceFiles(
+    functionId: string,
+    versionId: string
+  ): Promise<FunctionVersionFullSourceResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/source/files`);
+  },
+
   submitFunctionVersionSource(
     functionId: string,
     versionId: string,
-    file: File,
+    files: File[],
     entrypoint: string,
     handler: string
   ): Promise<FunctionVersionSourceResponse> {
     const form = new FormData();
-    form.append("files", file, file.name);
+    for (const file of files) {
+      form.append("files", file, file.name);
+    }
     form.append("entrypoint", entrypoint);
     form.append("handler", handler);
     return request(`/api/v1/functions/${functionId}/versions/${versionId}/source`, {
@@ -308,5 +331,33 @@ export const api = {
 
   getInvocation(invocationId: string): Promise<InvocationInspectionResponse> {
     return request(`/api/v1/invocations/${invocationId}`);
+  },
+
+  getFunctionVersionConfig(functionId: string, versionId: string): Promise<FunctionVersionConfigResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/config`);
+  },
+
+  upsertFunctionVersionEnvVar(
+    functionId: string,
+    versionId: string,
+    key: string,
+    value: string
+  ): Promise<FunctionVersionConfigResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/config/env/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
+  },
+
+  upsertFunctionVersionSecret(
+    functionId: string,
+    versionId: string,
+    key: string,
+    value: string
+  ): Promise<FunctionVersionConfigResponse> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/config/secrets/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
   },
 };

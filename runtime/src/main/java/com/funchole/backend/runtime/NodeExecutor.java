@@ -1,6 +1,7 @@
 package com.funchole.backend.runtime;
 
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 
 /**
  * Executes JavaScript artifacts through a persistent, warm Node process. An
@@ -8,5 +9,5 @@ import java.util.concurrent.CompletionStage;
  */
 public interface NodeExecutor {
 
-    CompletionStage<NodeExecutionResult> execute(NodeExecutionRequest request);
+    CompletionStage<NodeExecutionResult> execute(NodeExecutionRequest request, Consumer<NodeLogMessage> onLog);
 }

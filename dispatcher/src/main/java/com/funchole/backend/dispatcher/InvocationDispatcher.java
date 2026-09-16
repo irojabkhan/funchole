@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -49,6 +50,7 @@ public final class InvocationDispatcher {
     private final ExecutionPlanner executionPlanner;
     private final RuntimeExecutionGateway executionGateway;
     private final FunctionVersionEnvironmentResolver environmentResolver;
+    private final InvocationStepExecutionLogRegistry stepExecutionLogRegistry;
     private final JetStreamSubscription subscription;
 
     /**
@@ -115,6 +117,28 @@ public final class InvocationDispatcher {
             RuntimeExecutionGateway executionGateway,
             FunctionVersionEnvironmentResolver environmentResolver
     ) {
+        this(connection, invocationRegistry, stepExecutionRegistry, runtimeRegistry,
+                executionPlanner, executionGateway, environmentResolver, new NoopInvocationStepExecutionLogRegistry());
+    }
+
+    /**
+     * Full constructor, additionally wiring durable step-execution log
+     * storage (F248) - every {@link RuntimeLogEntry} the runtime worker
+     * streams during an execution is persisted through
+     * {@code stepExecutionLogRegistry} as it arrives, keyed by the step
+     * execution's own id (the same UUID as the execution's IPC
+     * {@code executionId} - see {@link RuntimeExecutionRequest#of}).
+     */
+    public InvocationDispatcher(
+            Connection connection,
+            InvocationRegistry invocationRegistry,
+            InvocationStepExecutionRegistry stepExecutionRegistry,
+            RuntimeRegistry runtimeRegistry,
+            ExecutionPlanner executionPlanner,
+            RuntimeExecutionGateway executionGateway,
+            FunctionVersionEnvironmentResolver environmentResolver,
+            InvocationStepExecutionLogRegistry stepExecutionLogRegistry
+    ) {
         this.connection = connection;
         this.invocationRegistry = invocationRegistry;
         this.stepExecutionRegistry = stepExecutionRegistry;
@@ -124,6 +148,7 @@ public final class InvocationDispatcher {
         this.executionPlanner = executionPlanner;
         this.executionGateway = executionGateway;
         this.environmentResolver = environmentResolver;
+        this.stepExecutionLogRegistry = stepExecutionLogRegistry;
         ensureStream();
         this.subscription = subscribe();
     }
@@ -237,7 +262,9 @@ public final class InvocationDispatcher {
         try {
             Map<String, String> environment = environmentResolver.resolve(stepExecution.componentVersionId());
             RuntimeExecutionRequest executionRequest = RuntimeExecutionRequest.of(stepExecution, stepInput, environment);
-            RuntimeExecutionHandle handle = executionGateway.handoff(runtimeTarget, executionRequest);
+            UUID stepExecutionId = stepExecution.id();
+            RuntimeExecutionHandle handle = executionGateway.handoff(runtimeTarget, executionRequest,
+                    logEntry -> stepExecutionLogRegistry.append(stepExecutionId, logEntry.stream(), logEntry.message()));
             RuntimeExecutionAcceptance acceptance = handle.acceptance();
             if (!acceptance.accepted()) {
                 throw new IllegalStateException("Runtime execution handoff rejected: " + acceptance.rejectionReason());
@@ -359,8 +386,16 @@ public final class InvocationDispatcher {
      *   <li>FAILED (any component type) - the Invocation becomes FAILED.</li>
      *   <li>COMPLETED RESPONSE step - the Invocation becomes COMPLETED, using
      *       the RESPONSE step's own result as the final response.</li>
-     *   <li>COMPLETED FUNCTION step - flow progression continues to the next
-     *       ordered step.</li>
+     *   <li>COMPLETED step of a DIRECT_FUNCTION invocation - the Invocation
+     *       becomes COMPLETED immediately using that step's own result.
+     *       {@link com.funchole.backend.invocation.JdbcInvocationRegistry}
+     *       always synthesizes exactly one FUNCTION-typed step for a direct
+     *       invocation (there is no RESPONSE step to designate the flow's
+     *       end, because there is no flow), so without this branch a direct
+     *       invocation's own step would complete durably while the
+     *       Invocation itself stayed PENDING forever - GAP-17.</li>
+     *   <li>COMPLETED FUNCTION step of a FLOW invocation - flow progression
+     *       continues to the next ordered step.</li>
      * </ul>
      */
     private void onStepTerminal(InvocationStepExecution execution) {
@@ -371,11 +406,17 @@ public final class InvocationDispatcher {
         if (execution.status() != InvocationStepExecutionStatus.COMPLETED) {
             return;
         }
-        if (isResponseStep(execution)) {
+        if (isResponseStep(execution) || isDirectFunctionInvocation(execution)) {
             completeInvocation(execution);
         } else {
             planAndDispatchNextStep(execution);
         }
+    }
+
+    private boolean isDirectFunctionInvocation(InvocationStepExecution execution) {
+        return invocationRegistry.findById(execution.invocationId())
+                .map(invocation -> invocation.kind() == InvocationKind.DIRECT_FUNCTION)
+                .orElse(false);
     }
 
     private boolean isResponseStep(InvocationStepExecution execution) {

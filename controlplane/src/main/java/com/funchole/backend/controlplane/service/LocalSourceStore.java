@@ -2,6 +2,7 @@ package com.funchole.backend.controlplane.service;
 
 import com.funchole.backend.controlplane.config.SourceStorageProperties;
 import com.funchole.backend.controlplane.entity.SourceFile;
+import com.funchole.backend.core.base.exception.ResourceNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -52,6 +53,16 @@ public class LocalSourceStore implements SourceStore {
             List<SourceFile> files = new ArrayList<>();
             for (String relativePath : relativePaths) {
                 Path target = versionRoot.resolve(relativePath).normalize();
+                if (!Files.exists(target)) {
+                    // The Postgres-side manifest (entrypoint/handler/relativePaths)
+                    // can outlive this on-disk content - e.g. the storage root is
+                    // wiped or replaced independently of the database. Fail with a
+                    // clear, specific 404 here rather than letting a raw
+                    // NoSuchFileException surface as an opaque 500 to callers.
+                    throw new ResourceNotFoundException(
+                            "Source content is no longer available for function version " + functionVersionId
+                                    + " (file " + relativePath + " is missing from storage, though its metadata survives)");
+                }
                 files.add(new SourceFile(relativePath, Files.readString(target)));
             }
             return files;

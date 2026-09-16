@@ -2,6 +2,8 @@ package com.funchole.backend.controlplane.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.funchole.backend.controlplane.dto.FunctionVersionFullSourceResponse;
+import com.funchole.backend.controlplane.dto.FunctionVersionSourceFileResponse;
 import com.funchole.backend.controlplane.dto.FunctionVersionSourceResponse;
 import com.funchole.backend.controlplane.entity.FunctionVersion;
 import com.funchole.backend.controlplane.entity.FunctionVersionSource;
@@ -111,6 +113,31 @@ public class FunctionVersionSourceController {
         List<String> relativePaths = bundle.files().stream().map(SourceFile::relativePath).toList();
         return ApiResponse.success(new FunctionVersionSourceResponse(
                 versionId, bundle.runtimeType(), bundle.runtimeVersion(), bundle.entrypoint(), bundle.handler(), relativePaths));
+    }
+
+    /**
+     * Same underlying source, but with each file's actual content included -
+     * used by the Web UI to seed a brand new draft version's source editor
+     * from a chosen earlier version ("branch from this version"), since
+     * {@link #getSource} deliberately omits content to keep that response
+     * small. Content only ever lives on {@link com.funchole.backend.controlplane.service.LocalSourceStore}'s
+     * disk, never in Postgres, so this always re-reads it from there.
+     */
+    @GetMapping("/files")
+    @SecurityRequirement(name = "bearerAuth")
+    public ApiResponse<FunctionVersionFullSourceResponse> getSourceFiles(
+            @AuthenticationPrincipal AppUserPrincipal appUserPrincipal,
+            @PathVariable UUID functionId,
+            @PathVariable UUID versionId
+    ) {
+        functionVersionService.getVersionById(appUserPrincipal.getId(), functionId, versionId);
+        SourceBundle bundle = functionVersionSourceService.findSource(versionId)
+                .orElseThrow(() -> new ResourceNotFoundException("No source submitted for function version: " + versionId));
+
+        List<FunctionVersionSourceFileResponse> files = bundle.files().stream()
+                .map(file -> new FunctionVersionSourceFileResponse(file.relativePath(), file.content()))
+                .toList();
+        return ApiResponse.success(new FunctionVersionFullSourceResponse(bundle.entrypoint(), bundle.handler(), files));
     }
 
     private FunctionVersionSourceResponse toResponse(FunctionVersionSource source) {

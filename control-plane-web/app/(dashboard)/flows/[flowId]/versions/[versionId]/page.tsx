@@ -22,6 +22,8 @@ import {
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/Button";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { JsonEditor } from "@/components/CodeEditor";
+import { OutputLog } from "@/components/OutputLog";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -31,9 +33,19 @@ import {
   ArchiveIcon,
   WorkflowIcon,
   ExternalLinkIcon,
+  ZapIcon,
+  CheckIcon,
 } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
-import type { FlowResponse, FlowStepComponentType, FlowStepResponse, FlowVersionResponse } from "@/lib/types";
+import type {
+  FlowResponse,
+  FlowStepComponentType,
+  FlowStepResponse,
+  FlowVersionResponse,
+  FunctionResponse,
+  FunctionVersionResponse,
+  InvocationInspectionResponse,
+} from "@/lib/types";
 
 const NODE_WIDTH = 260;
 const ROW_HEIGHT = 150;
@@ -119,6 +131,7 @@ function FlowVersionCanvas() {
   const [versionList, setVersionList] = useState<FlowVersionResponse[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [inspector, setInspector] = useState<InspectorMode>(null);
+  const [testPanelOpen, setTestPanelOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -185,6 +198,7 @@ function FlowVersionCanvas() {
 
   const onNodeClick = useCallback(
     (_: MouseEvent, node: Node<StepNodeData>) => {
+      setTestPanelOpen(false);
       setInspector({ kind: isDraft ? "edit" : "view", step: node.data.step });
     },
     [isDraft]
@@ -205,6 +219,7 @@ function FlowVersionCanvas() {
     if (!isDraft) return;
     const type = event.dataTransfer.getData("application/funchole-step") as FlowStepComponentType;
     if (!type) return;
+    setTestPanelOpen(false);
     setInspector({ kind: "create", componentType: type });
   }
 
@@ -278,6 +293,20 @@ function FlowVersionCanvas() {
             <ExternalLinkIcon className="h-3.5 w-3.5" />
             {flow.httpMethod} {flow.path}
           </span>
+          {version.status !== "ARCHIVED" && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setInspector(null);
+                setTestPanelOpen((open) => !open);
+              }}
+              disabled={steps.length === 0}
+              title={steps.length === 0 ? "Add at least one step first" : "Run this version directly, without a Gateway request"}
+            >
+              <ZapIcon className="h-4 w-4" />
+              Test flow
+            </Button>
+          )}
           {version.status === "DRAFT" && (
             <Button
               variant="primary"
@@ -318,7 +347,11 @@ function FlowVersionCanvas() {
                 key={item.type}
                 draggable={isDraft}
                 onDragStart={(e) => onPaletteDragStart(e, item.type)}
-                onClick={() => isDraft && setInspector({ kind: "create", componentType: item.type })}
+                onClick={() => {
+                  if (!isDraft) return;
+                  setTestPanelOpen(false);
+                  setInspector({ kind: "create", componentType: item.type });
+                }}
                 className={`rounded-lg border border-border bg-background px-3 py-2.5 transition-colors ${
                   isDraft ? "cursor-grab hover:border-cyan-500/60 active:cursor-grabbing" : "cursor-not-allowed opacity-50"
                 }`}
@@ -383,6 +416,10 @@ function FlowVersionCanvas() {
             }}
             onError={setError}
           />
+        )}
+
+        {testPanelOpen && (
+          <TestFlowPanel flowId={flowId} versionId={versionId} onClose={() => setTestPanelOpen(false)} onError={setError} />
         )}
       </div>
     </div>
@@ -514,31 +551,17 @@ function StepInspector({ mode, flowId, versionId, nextPosition, isDraft, onClose
           />
         </label>
 
-        <label className={fieldClass}>
-          <span className={labelClass}>Component ID</span>
-          <input
-            type="text"
-            required
-            disabled={!editable}
-            placeholder="88888888-8888-8888-8888-888888888861"
-            value={componentId}
-            onChange={(e) => setComponentId(e.target.value)}
-            className={`${inputClass} font-mono text-xs`}
-          />
-        </label>
-
-        <label className={fieldClass}>
-          <span className={labelClass}>Component version ID</span>
-          <input
-            type="text"
-            required
-            disabled={!editable}
-            placeholder="99999999-9999-9999-9999-999999999861"
-            value={componentVersionId}
-            onChange={(e) => setComponentVersionId(e.target.value)}
-            className={`${inputClass} font-mono text-xs`}
-          />
-        </label>
+        <ComponentPicker
+          componentType={componentType}
+          flowId={flowId}
+          componentId={componentId}
+          componentVersionId={componentVersionId}
+          editable={editable}
+          onChange={(id, verId) => {
+            setComponentId(id);
+            setComponentVersionId(verId);
+          }}
+        />
       </div>
 
       {editable && (
@@ -553,6 +576,323 @@ function StepInspector({ mode, flowId, versionId, nextPosition, isDraft, onClose
           )}
         </div>
       )}
+    </aside>
+  );
+}
+
+interface ComponentPickerProps {
+  componentType: FlowStepComponentType;
+  flowId: string;
+  componentId: string;
+  componentVersionId: string;
+  editable: boolean;
+  onChange: (componentId: string, componentVersionId: string) => void;
+}
+
+/**
+ * FUNCTION/RESPONSE/MIDDLEWARE steps pin a FunctionVersion; SUB_FLOW steps
+ * pin a FlowVersion. Either way this replaces raw UUID text entry with real
+ * name-based pickers (GAP-19) - only READY FunctionVersions / ADOPTED
+ * FlowVersions are offered, matching what adoption itself requires.
+ */
+function ComponentPicker({ componentType, flowId, componentId, componentVersionId, editable, onChange }: ComponentPickerProps) {
+  const isSubFlow = componentType === "SUB_FLOW";
+
+  const [functions, setFunctions] = useState<FunctionResponse[] | null>(null);
+  const [functionVersions, setFunctionVersions] = useState<FunctionVersionResponse[] | null>(null);
+  const [flows, setFlows] = useState<FlowResponse[] | null>(null);
+  const [flowVersions, setFlowVersions] = useState<FlowVersionResponse[] | null>(null);
+
+  // The version list belongs to whichever componentId it was last fetched
+  // for. When componentId changes (a new Function/Flow was picked, or it
+  // was cleared), that stale list must disappear immediately - adjusting
+  // state during render (React's documented pattern for this) rather than
+  // resetting it from inside an effect.
+  const [versionsFor, setVersionsFor] = useState(componentId);
+  if (componentId !== versionsFor) {
+    setVersionsFor(componentId);
+    setFunctionVersions(null);
+    setFlowVersions(null);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (isSubFlow) {
+        try {
+          const data = await api.listFlows(1, 100);
+          if (!cancelled) setFlows(data.items.filter((f) => f.id !== flowId));
+        } catch {
+          if (!cancelled) setFlows([]);
+        }
+      } else {
+        try {
+          const data = await api.listFunctions(1, 100);
+          if (!cancelled) setFunctions(data.items);
+        } catch {
+          if (!cancelled) setFunctions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSubFlow, flowId]);
+
+  useEffect(() => {
+    if (!componentId) return;
+    let cancelled = false;
+    (async () => {
+      if (isSubFlow) {
+        try {
+          const data = await api.listFlowVersions(componentId, 1, 100);
+          if (!cancelled) setFlowVersions(data.items.filter((v) => v.status === "ADOPTED").sort((a, b) => b.version - a.version));
+        } catch {
+          if (!cancelled) setFlowVersions([]);
+        }
+      } else {
+        try {
+          const data = await api.listFunctionVersions(componentId, 1, 100);
+          if (!cancelled) setFunctionVersions(data.items.filter((v) => v.status === "READY").sort((a, b) => b.version - a.version));
+        } catch {
+          if (!cancelled) setFunctionVersions([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSubFlow, componentId]);
+
+  const parentOptions = isSubFlow ? flows : functions;
+  const versionOptions = isSubFlow ? flowVersions : functionVersions;
+  const parentLabel = isSubFlow ? "Flow" : "Function";
+
+  return (
+    <>
+      <label className={fieldClass}>
+        <span className={labelClass}>{parentLabel}</span>
+        <select
+          required
+          disabled={!editable || !parentOptions}
+          value={componentId}
+          onChange={(e) => onChange(e.target.value, "")}
+          className={inputClass}
+        >
+          <option value="" disabled>
+            {parentOptions ? `Select a ${parentLabel.toLowerCase()}…` : "Loading…"}
+          </option>
+          {parentOptions?.map((item) =>
+            isSubFlow ? (
+              <option key={item.id} value={item.id}>
+                {(item as FlowResponse).name}
+              </option>
+            ) : (
+              <option key={item.id} value={item.id}>
+                {(item as FunctionResponse).name} ({(item as FunctionResponse).functionKey})
+              </option>
+            )
+          )}
+          {componentId && parentOptions && !parentOptions.some((item) => item.id === componentId) && (
+            <option value={componentId}>{componentId} (not in your list)</option>
+          )}
+        </select>
+      </label>
+
+      <label className={fieldClass}>
+        <span className={labelClass}>Version</span>
+        <select
+          required
+          disabled={!editable || !componentId || !versionOptions}
+          value={componentVersionId}
+          onChange={(e) => onChange(componentId, e.target.value)}
+          className={inputClass}
+        >
+          <option value="" disabled>
+            {!componentId
+              ? `Select a ${parentLabel.toLowerCase()} first`
+              : versionOptions
+                ? versionOptions.length === 0
+                  ? isSubFlow
+                    ? "No ADOPTED versions"
+                    : "No READY versions"
+                  : "Select a version…"
+                : "Loading…"}
+          </option>
+          {versionOptions?.map((v) => (
+            <option key={v.id} value={v.id}>
+              v{v.version}
+            </option>
+          ))}
+          {componentVersionId && versionOptions && !versionOptions.some((v) => v.id === componentVersionId) && (
+            <option value={componentVersionId}>{componentVersionId} (not in your list)</option>
+          )}
+        </select>
+      </label>
+    </>
+  );
+}
+
+interface TestFlowPanelProps {
+  flowId: string;
+  versionId: string;
+  onClose: () => void;
+  onError: (message: string) => void;
+}
+
+function TestFlowPanel({ flowId, versionId, onClose, onError }: TestFlowPanelProps) {
+  const [input, setInput] = useState("{}");
+  const [busy, setBusy] = useState(false);
+  const [invocationId, setInvocationId] = useState<string | null>(null);
+  const [initialStatus, setInitialStatus] = useState<string | null>(null);
+  const [inspection, setInspection] = useState<InvocationInspectionResponse | null>(null);
+  const [inspecting, setInspecting] = useState(false);
+  const currentStatus = inspection?.status ?? initialStatus ?? "PENDING";
+
+  const inputError = useMemo(() => {
+    if (input.trim() === "") return null;
+    try {
+      JSON.parse(input);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Invalid JSON";
+    }
+  }, [input]);
+
+  // Runs this exact FlowVersion's own steps directly - no Gateway/HTTP/TLS
+  // hop - so execution is asynchronous just like a real routed request.
+  // Poll a few times so the user sees it actually complete.
+  useEffect(() => {
+    if (!invocationId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      try {
+        const data = await api.getInvocation(invocationId);
+        if (cancelled) return;
+        setInspection(data);
+        if (data.status !== "PENDING" || attempts >= 10) {
+          clearInterval(timer);
+        }
+      } catch {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [invocationId]);
+
+  async function handleRun() {
+    onError("");
+    setInspection(null);
+    setBusy(true);
+    try {
+      const result = await api.invokeFlowVersion(flowId, versionId, input);
+      setInvocationId(result.invocationId);
+      setInitialStatus(result.initialStatus);
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Failed to invoke flow");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleInspect() {
+    if (!invocationId) return;
+    setInspecting(true);
+    try {
+      const data = await api.getInvocation(invocationId);
+      setInspection(data);
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Failed to inspect invocation");
+    } finally {
+      setInspecting(false);
+    }
+  }
+
+  return (
+    <aside className="flex w-96 flex-col overflow-y-auto border-l border-border bg-surface">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="flex items-center gap-2">
+          <ZapIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm font-semibold text-foreground">Test flow</p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-muted hover:bg-surface-hover hover:text-foreground"
+        >
+          <XIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-4 p-4">
+        <p className="text-xs text-muted">
+          Runs this exact version&apos;s own steps directly, with no Gateway, HTTP route, or TLS involved -
+          the same Dispatcher/Runtime path a real request to this route would use. Works on DRAFT versions too,
+          so you can test before adopting.
+        </p>
+
+        <JsonEditor value={input} onChange={setInput} error={inputError} label="Input payload (JSON)" />
+
+        <div>
+          <Button variant="primary" size="sm" disabled={busy || !!inputError} onClick={handleRun}>
+            <PlayIcon className="h-3.5 w-3.5" />
+            Run
+          </Button>
+        </div>
+
+        {invocationId && (
+          <div className="rounded-lg border border-border bg-background p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs">
+                <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="text-muted">Invocation status</span>
+                <StatusBadge status={currentStatus} />
+              </div>
+              <Button variant="secondary" size="sm" disabled={inspecting} onClick={handleInspect}>
+                Inspect
+              </Button>
+            </div>
+            <p className="mt-1.5 break-all font-mono text-xs text-muted">{invocationId}</p>
+
+            {inspection && (
+              <div className="mt-3 border-t border-border pt-3">
+                <dl className="grid gap-1.5 text-xs">
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-muted">Status</dt>
+                    <dd>
+                      <StatusBadge status={inspection.status} />
+                    </dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-20 shrink-0 text-muted">Input</dt>
+                    <dd className="break-all font-mono text-foreground">{inspection.inputPayload}</dd>
+                  </div>
+                  {inspection.result && (
+                    <div className="flex gap-2">
+                      <dt className="w-20 shrink-0 text-muted">Response</dt>
+                      <dd className="break-all font-mono text-foreground">{inspection.result}</dd>
+                    </div>
+                  )}
+                  {inspection.error && (
+                    <div className="flex gap-2">
+                      <dt className="w-20 shrink-0 text-muted">Error</dt>
+                      <dd className="break-all font-mono text-rose-600 dark:text-rose-400">{inspection.error}</dd>
+                    </div>
+                  )}
+                </dl>
+
+                <OutputLog steps={inspection.steps} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

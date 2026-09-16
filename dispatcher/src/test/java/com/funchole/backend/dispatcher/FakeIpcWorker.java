@@ -31,6 +31,7 @@ final class FakeIpcWorker implements AutoCloseable {
     enum Behavior {
         ACCEPT,
         ACCEPT_THEN_ERROR,
+        ACCEPT_WITH_LOGS,
         WRONG_EXECUTION_ID,
         SILENT,
         CLOSE_IMMEDIATELY
@@ -116,6 +117,12 @@ final class FakeIpcWorker implements AutoCloseable {
                         respond(out, executionId);
                         respondError(out, executionId);
                     }
+                    case ACCEPT_WITH_LOGS -> {
+                        respond(out, executionId);
+                        respondLog(out, executionId, "stdout", "hello from the function");
+                        respondLog(out, executionId, "stderr", "a warning");
+                        respondResult(out, executionId);
+                    }
                     case WRONG_EXECUTION_ID -> respond(out, UUID.randomUUID());
                     case SILENT -> {
                         // Deliberately never respond, to exercise the client's accept timeout.
@@ -139,6 +146,13 @@ final class FakeIpcWorker implements AutoCloseable {
     private void respondError(OutputStream out, UUID executionId) throws IOException {
         String json = "{\"type\":\"ERROR\",\"executionId\":\"" + executionId
                 + "\",\"error\":{\"code\":\"FAKE_RUNTIME_ERROR\",\"message\":\"Simulated runtime failure\"}}\n";
+        out.write(json.getBytes(StandardCharsets.UTF_8));
+        out.flush();
+    }
+
+    private void respondLog(OutputStream out, UUID executionId, String stream, String message) throws IOException {
+        String json = "{\"type\":\"LOG\",\"executionId\":\"" + executionId
+                + "\",\"stream\":\"" + stream + "\",\"message\":\"" + message + "\"}\n";
         out.write(json.getBytes(StandardCharsets.UTF_8));
         out.flush();
     }

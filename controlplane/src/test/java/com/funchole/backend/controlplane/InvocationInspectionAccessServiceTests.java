@@ -221,7 +221,8 @@ class InvocationInspectionAccessServiceTests {
         return new InvocationStepInspectionResult(
                 UUID.randomUUID(), 1, "FUNCTION", UUID.randomUUID(), UUID.randomUUID(),
                 "COMPLETED", 1, "{\"ok\":true}", null,
-                OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now());
+                OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(), OffsetDateTime.now(),
+                List.of());
     }
 
     private Flow createFlow() {

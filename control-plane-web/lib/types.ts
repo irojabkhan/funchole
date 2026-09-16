@@ -209,10 +209,55 @@ export interface FunctionVersionSourceResponse {
   relativePaths: string[];
 }
 
+export interface FunctionVersionSourceFileResponse {
+  path: string;
+  content: string;
+}
+
+export interface FunctionVersionFullSourceResponse {
+  entrypoint: string;
+  handler: string;
+  files: FunctionVersionSourceFileResponse[];
+}
+
+export interface FunctionVersionEnvVarResponse {
+  id: string;
+  key: string;
+  value: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunctionVersionSecretResponse {
+  id: string;
+  key: string;
+  secretRef: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FunctionVersionConfigResponse {
+  functionVersionId: string;
+  envVars: FunctionVersionEnvVarResponse[];
+  secrets: FunctionVersionSecretResponse[];
+}
+
 export interface DirectInvocationResponse {
   invocationId: string;
   functionVersionId: string;
   initialStatus: string;
+}
+
+export interface DirectFlowInvocationResponse {
+  invocationId: string;
+  flowVersionId: string;
+  initialStatus: string;
+}
+
+export interface InvocationStepLogResponse {
+  stream: string;
+  message: string;
+  createdAt: string;
 }
 
 export interface InvocationStepInspectionResponse {
@@ -229,6 +274,7 @@ export interface InvocationStepInspectionResponse {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  logs: InvocationStepLogResponse[];
 }
 
 export interface InvocationInspectionResponse {

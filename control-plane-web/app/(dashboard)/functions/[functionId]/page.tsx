@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button, buttonClasses } from "@/components/Button";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
-import { ArrowLeftIcon, ChevronRightIcon, PlusIcon, PencilIcon, TrashIcon } from "@/components/icons";
+import { ArrowLeftIcon, ChevronRightIcon, PlusIcon, PencilIcon, TrashIcon, CopyIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type { FunctionResponse, FunctionVersionResponse } from "@/lib/types";
 
@@ -90,12 +90,15 @@ export default function FunctionDetailPage() {
     }
   }
 
-  async function handleNewDraft() {
+  async function handleNewDraft(copyFromVersionId?: string) {
     setError(null);
     setBusy(true);
     try {
       const version = await api.createFunctionVersion(functionId, { runtime: fn?.runtime ?? "NODE" });
-      router.push(`/functions/${functionId}/versions/${version.id}`);
+      const destination = copyFromVersionId
+        ? `/functions/${functionId}/versions/${version.id}?copyFrom=${copyFromVersionId}`
+        : `/functions/${functionId}/versions/${version.id}`;
+      router.push(destination);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create draft version");
       setBusy(false);
@@ -200,7 +203,7 @@ export default function FunctionDetailPage() {
 
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">Versions</h2>
-        <Button variant="primary" size="sm" onClick={handleNewDraft} disabled={busy}>
+        <Button variant="primary" size="sm" onClick={() => handleNewDraft()} disabled={busy}>
           <PlusIcon className="h-4 w-4" />
           New draft version
         </Button>
@@ -243,9 +246,20 @@ export default function FunctionDetailPage() {
                 </td>
                 <td className="px-4 py-3 text-muted">{new Date(version.createdAt).toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">
-                  <Link href={`/functions/${functionId}/versions/${version.id}`} className={buttonClasses("secondary", "sm")}>
-                    View
-                  </Link>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      title="New draft version from this one"
+                      disabled={busy}
+                      onClick={() => handleNewDraft(version.id)}
+                    >
+                      <CopyIcon className="h-4 w-4" />
+                    </Button>
+                    <Link href={`/functions/${functionId}/versions/${version.id}`} className={buttonClasses("secondary", "sm")}>
+                      View
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

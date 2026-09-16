@@ -42,7 +42,8 @@ public final class DispatcherMain {
                                 readString("BAO_ADDR", "http://localhost:8200"),
                                 readString("BAO_TOKEN", "root")
                         )
-                )
+                ),
+                new JdbcInvocationStepExecutionLogRegistry(dataSource)
         );
         Duration pollTimeout = Duration.ofMillis(readInt("DISPATCHER_POLL_TIMEOUT_MS", 1000));
 

@@ -179,6 +179,29 @@ class FunctionVersionSourceIntegrationTests {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void readsBackFullSourceIncludingFileContent() throws Exception {
+        submitArchive(zipOf("index.mjs", "export async function handler(input) { return input; }",
+                "package.json", "{\"name\":\"fn\"}"), "index.mjs");
+
+        mockMvc.perform(get("/api/v1/functions/{functionId}/versions/{versionId}/source/files", functionId, versionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.entrypoint").value("index.mjs"))
+                .andExpect(jsonPath("$.data.handler").value("handler"))
+                .andExpect(jsonPath("$.data.files[?(@.path == 'index.mjs')].content")
+                        .value(org.hamcrest.Matchers.contains("export async function handler(input) { return input; }")))
+                .andExpect(jsonPath("$.data.files[?(@.path == 'package.json')].content")
+                        .value(org.hamcrest.Matchers.contains("{\"name\":\"fn\"}")));
+    }
+
+    @Test
+    void rejectsReadingFullSourceForAVersionWithNoSourceSubmitted() throws Exception {
+        mockMvc.perform(get("/api/v1/functions/{functionId}/versions/{versionId}/source/files", functionId, versionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isNotFound());
+    }
+
     private void submitArchive(MockMultipartFile archive, String entrypoint) throws Exception {
         mockMvc.perform(multipart("/api/v1/functions/{functionId}/versions/{versionId}/source", functionId, versionId)
                         .file(archive)

@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,7 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final Object writeLock = new Object();
     private final Map<UUID, CompletableFuture<NodeExecutionResult>> pending = new ConcurrentHashMap<>();
+    private final Map<UUID, Consumer<NodeLogMessage>> logListeners = new ConcurrentHashMap<>();
     private volatile boolean closed = false;
 
     private PersistentNodeExecutor(Process process) {
@@ -55,15 +57,19 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
     }
 
     @Override
-    public CompletionStage<NodeExecutionResult> execute(NodeExecutionRequest request) {
+    public CompletionStage<NodeExecutionResult> execute(NodeExecutionRequest request, Consumer<NodeLogMessage> onLog) {
         CompletableFuture<NodeExecutionResult> newFuture = new CompletableFuture<>();
         CompletableFuture<NodeExecutionResult> existing = pending.putIfAbsent(request.executionId(), newFuture);
         if (existing != null) {
             return existing;
         }
+        if (onLog != null) {
+            logListeners.put(request.executionId(), onLog);
+        }
 
         if (closed || !process.isAlive()) {
             pending.remove(request.executionId(), newFuture);
+            logListeners.remove(request.executionId());
             newFuture.completeExceptionally(new IllegalStateException("Node executor process is not running"));
             return newFuture;
         }
@@ -76,6 +82,7 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
             writeExecute(NodeExecuteMessage.from(request));
         } catch (IOException exception) {
             pending.remove(request.executionId(), newFuture);
+            logListeners.remove(request.executionId());
             newFuture.completeExceptionally(exception);
         }
         return newFuture;
@@ -172,6 +179,7 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
         }
 
         CompletableFuture<NodeExecutionResult> future = pending.remove(message.executionId());
+        logListeners.remove(message.executionId());
         if (future == null) {
             logger.warn("Received Node executor result for unknown or already-completed executionId={}", message.executionId());
             return;
@@ -193,6 +201,10 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
                     message.stream(),
                     message.message()
             );
+            Consumer<NodeLogMessage> listener = logListeners.get(message.executionId());
+            if (listener != null) {
+                listener.accept(message);
+            }
         } catch (IOException exception) {
             logger.warn("Discarding malformed Node log message: {}", exception.getMessage());
         }
@@ -213,5 +225,6 @@ public final class PersistentNodeExecutor implements NodeExecutor, AutoCloseable
     private void failAllPending(Exception cause) {
         pending.forEach((executionId, future) -> future.completeExceptionally(cause));
         pending.clear();
+        logListeners.clear();
     }
 }

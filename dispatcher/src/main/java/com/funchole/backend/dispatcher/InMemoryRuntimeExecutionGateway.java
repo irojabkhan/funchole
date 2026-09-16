@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * Fake, in-memory runtime execution gateway. Proves the handoff boundary for
@@ -24,7 +25,7 @@ public final class InMemoryRuntimeExecutionGateway implements RuntimeExecutionGa
     private final Map<UUID, RuntimeExecutionRequest> requestsByExecutionId = new ConcurrentHashMap<>();
 
     @Override
-    public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+    public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, Consumer<RuntimeLogEntry> onLog) {
         if (request == null) {
             throw new IllegalArgumentException("Runtime execution request is required");
         }

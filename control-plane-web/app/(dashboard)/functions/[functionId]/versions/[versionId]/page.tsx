@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import CodeMirror, { EditorView } from "@uiw/react-codemirror";
+import { syntaxHighlighting } from "@codemirror/language";
 import { StatusBadge } from "@/components/StatusBadge";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import {
+  codeSyntaxColorsDark,
+  codeSyntaxColorsLight,
+  editorChrome,
+  JsonEditor,
+  languageForPath,
+  useIsDarkMode,
+} from "@/components/CodeEditor";
+import { OutputLog } from "@/components/OutputLog";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
@@ -14,10 +25,14 @@ import {
   PlayIcon,
   ZapIcon,
   CheckIcon,
+  KeyIcon,
+  PlusIcon,
+  XIcon,
 } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type {
   FunctionResponse,
+  FunctionVersionConfigResponse,
   FunctionVersionResponse,
   FunctionVersionSourceResponse,
   InvocationInspectionResponse,
@@ -31,6 +46,7 @@ const DEFAULT_SOURCE = `export async function handler(input) {
 export default function FunctionVersionDetailPage() {
   const params = useParams<{ functionId: string; versionId: string }>();
   const { functionId, versionId } = params;
+  const copyFrom = useSearchParams().get("copyFrom");
 
   const [fn, setFn] = useState<FunctionResponse | null>(null);
   const [version, setVersion] = useState<FunctionVersionResponse | null>(null);
@@ -163,9 +179,12 @@ export default function FunctionVersionDetailPage() {
         source={source}
         sourceLoaded={sourceLoaded}
         isDraft={isDraft}
+        copyFrom={copyFrom}
         onSubmitted={refresh}
         onError={setError}
       />
+
+      <ConfigPanel functionId={functionId} versionId={versionId} onError={setError} />
 
       {version.status === "READY" && (
         <TestInvokePanel functionId={functionId} versionId={versionId} onError={setError} />
@@ -202,28 +221,80 @@ interface SourcePanelProps {
   source: FunctionVersionSourceResponse | null;
   sourceLoaded: boolean;
   isDraft: boolean;
+  copyFrom: string | null;
   onSubmitted: () => void;
   onError: (message: string) => void;
 }
 
-function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, onSubmitted, onError }: SourcePanelProps) {
-  const [editing, setEditing] = useState(false);
-  const [code, setCode] = useState(DEFAULT_SOURCE);
-  const [entrypoint, setEntrypoint] = useState("index.mjs");
-  const [handler, setHandler] = useState("handler");
-  const [busy, setBusy] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+interface SourceFileDraft {
+  path: string;
+  content: string;
+}
 
-  // Derive the initial editing mode once the real fetch settles, adjusting
-  // state during render (React's documented pattern for this) rather than
-  // in an effect - `initializedFor` guards it to fire only on that one
-  // loading->loaded transition, so a user's own "Replace source"/"Cancel"
-  // toggle is never overwritten by a later refresh.
+const DEFAULT_ENTRYPOINT = "index.mjs";
+const DEFAULT_FILES: SourceFileDraft[] = [{ path: DEFAULT_ENTRYPOINT, content: DEFAULT_SOURCE }];
+
+function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, copyFrom, onSubmitted, onError }: SourcePanelProps) {
+  const [editing, setEditing] = useState(false);
+  const [files, setFiles] = useState<SourceFileDraft[]>(DEFAULT_FILES);
+  const [activePath, setActivePath] = useState(DEFAULT_ENTRYPOINT);
+  const [entrypoint, setEntrypoint] = useState(DEFAULT_ENTRYPOINT);
+  const [handler, setHandler] = useState("handler");
+  const [addingFile, setAddingFile] = useState(false);
+  const [newFileName, setNewFileName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const isDark = useIsDarkMode();
+
+  // Derive the initial editing mode - and, when replacing an existing
+  // submission, seed the file list from its known paths/entrypoint/handler -
+  // once the real fetch settles, adjusting state during render (React's
+  // documented pattern for this) rather than in an effect. `initializedFor`
+  // guards it to fire only on that one loading->loaded transition, so a
+  // user's own "Replace source"/"Cancel" toggle is never overwritten by a
+  // later refresh. Note the backend only ever returns file paths, never
+  // content, so re-editing an EXISTING submission starts those files empty -
+  // there is no way to read back what was previously submitted for THIS
+  // version. A brand new version with nothing of its own yet and a
+  // `copyFrom` id (set by "New draft version from this one") instead fetches
+  // that other version's real file content below, via a separate effect.
   const [initializedFor, setInitializedFor] = useState(false);
   if (sourceLoaded && !initializedFor) {
     setInitializedFor(true);
     setEditing(!source && isDraft);
+    if (source) {
+      const seeded = source.relativePaths.map((path) => ({ path, content: "" }));
+      setFiles(seeded.length > 0 ? seeded : DEFAULT_FILES);
+      setActivePath(source.entrypoint || seeded[0]?.path || DEFAULT_ENTRYPOINT);
+      setEntrypoint(source.entrypoint);
+      setHandler(source.handler);
+    }
   }
+
+  useEffect(() => {
+    if (!sourceLoaded || source || !copyFrom) return;
+    let cancelled = false;
+    (async () => {
+      setCopying(true);
+      try {
+        const data = await api.getFunctionVersionSourceFiles(functionId, copyFrom);
+        if (cancelled) return;
+        const copied = data.files.map((f) => ({ path: f.path, content: f.content }));
+        setFiles(copied.length > 0 ? copied : DEFAULT_FILES);
+        setActivePath(data.entrypoint || copied[0]?.path || DEFAULT_ENTRYPOINT);
+        setEntrypoint(data.entrypoint || copied[0]?.path || DEFAULT_ENTRYPOINT);
+        setHandler(data.handler || "handler");
+      } catch (err) {
+        if (!cancelled) onError(err instanceof ApiError ? err.message : "Failed to copy source from the selected version");
+      } finally {
+        if (!cancelled) setCopying(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceLoaded, source, copyFrom, functionId, onError]);
 
   if (!sourceLoaded) {
     return (
@@ -233,20 +304,61 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, onS
     );
   }
 
-  async function handleFilePicked(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
-    setCode(text);
-    setEntrypoint(file.name);
+  const activeFile = files.find((f) => f.path === activePath) ?? files[0];
+
+  function updateActiveContent(content: string) {
+    setFiles((prev) => prev.map((f) => (f.path === activePath ? { ...f, content } : f)));
+  }
+
+  function handleAddFile() {
+    const name = newFileName.trim();
+    if (!name) {
+      setAddingFile(false);
+      return;
+    }
+    if (files.some((f) => f.path === name)) {
+      onError(`A file named "${name}" already exists`);
+      return;
+    }
+    setFiles((prev) => [...prev, { path: name, content: "" }]);
+    setActivePath(name);
+    setNewFileName("");
+    setAddingFile(false);
+  }
+
+  function handleRemoveFile(path: string) {
+    if (files.length <= 1) return;
+    const remaining = files.filter((f) => f.path !== path);
+    setFiles(remaining);
+    if (activePath === path) setActivePath(remaining[0].path);
+    if (entrypoint === path) setEntrypoint(remaining[0].path);
+  }
+
+  async function handleFilesPicked(event: ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files;
+    if (!picked || picked.length === 0) return;
+    const entries = await Promise.all(
+      Array.from(picked).map(async (file) => ({ path: file.name, content: await file.text() }))
+    );
+    setFiles((prev) => {
+      const merged = [...prev];
+      for (const entry of entries) {
+        const existingIndex = merged.findIndex((f) => f.path === entry.path);
+        if (existingIndex >= 0) merged[existingIndex] = entry;
+        else merged.push(entry);
+      }
+      return merged;
+    });
+    setActivePath(entries[0].path);
+    event.target.value = "";
   }
 
   async function handleSubmit() {
     onError("");
     setBusy(true);
     try {
-      const file = new File([code], entrypoint, { type: "text/javascript" });
-      await api.submitFunctionVersionSource(functionId, versionId, file, entrypoint, handler);
+      const fileObjects = files.map((f) => new File([f.content], f.path));
+      await api.submitFunctionVersionSource(functionId, versionId, fileObjects, entrypoint, handler);
       setEditing(false);
       onSubmitted();
     } catch (err) {
@@ -293,12 +405,15 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, onS
   return (
     <div className={`${panelClass} flex flex-col gap-4 p-4`}>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">Source editor</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-foreground">Source editor</p>
+          {copying && <span className="text-xs text-muted">Copying files from the previous version…</span>}
+        </div>
         <div className="flex gap-2">
-          <input ref={fileInputRef} type="file" accept=".mjs,.js,.ts" className="hidden" onChange={handleFilePicked} />
-          <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
+          <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFilesPicked} />
+          <Button variant="secondary" size="sm" disabled={copying} onClick={() => fileInputRef.current?.click()}>
             <UploadIcon className="h-3.5 w-3.5" />
-            Upload file
+            Upload file(s)
           </Button>
         </div>
       </div>
@@ -306,12 +421,13 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, onS
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={fieldClass}>
           <span className={labelClass}>Entrypoint</span>
-          <input
-            type="text"
-            value={entrypoint}
-            onChange={(e) => setEntrypoint(e.target.value)}
-            className={`${inputClass} font-mono`}
-          />
+          <select value={entrypoint} onChange={(e) => setEntrypoint(e.target.value)} className={inputClass}>
+            {files.map((f) => (
+              <option key={f.path} value={f.path}>
+                {f.path}
+              </option>
+            ))}
+          </select>
         </label>
         <label className={fieldClass}>
           <span className={labelClass}>Handler (exported function name)</span>
@@ -324,19 +440,91 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, onS
         </label>
       </div>
 
-      <label className={fieldClass}>
-        <span className={labelClass}>Code</span>
-        <textarea
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          rows={10}
-          spellCheck={false}
-          className={`${inputClass} h-auto resize-y py-2 font-mono text-xs leading-relaxed`}
-        />
-      </label>
+      <div className={fieldClass}>
+        <span className={labelClass}>Files</span>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {files.map((f) => (
+            <div
+              key={f.path}
+              onClick={() => setActivePath(f.path)}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-mono transition-colors ${
+                f.path === activePath
+                  ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-500/10 dark:text-cyan-400"
+                  : "border-border text-muted hover:border-border-strong hover:text-foreground"
+              }`}
+            >
+              <span>{f.path}</span>
+              {f.path === entrypoint && <span className="text-[9px] uppercase tracking-wide text-muted">entry</span>}
+              {files.length > 1 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveFile(f.path);
+                  }}
+                  aria-label={`Remove ${f.path}`}
+                  className="cursor-pointer text-muted hover:text-rose-600 dark:hover:text-rose-400"
+                >
+                  <XIcon className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          ))}
+          {addingFile ? (
+            <div className="flex items-center gap-1">
+              <input
+                autoFocus
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddFile();
+                  if (e.key === "Escape") {
+                    setAddingFile(false);
+                    setNewFileName("");
+                  }
+                }}
+                placeholder="package.json"
+                className="h-7 w-32 rounded-md border border-border bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-cyan-500 dark:focus:border-cyan-400"
+              />
+              <Button variant="secondary" size="sm" onClick={handleAddFile}>
+                Add
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAddingFile(true)}
+              className="flex cursor-pointer items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1 text-xs text-muted hover:border-cyan-500/60 hover:text-cyan-600 dark:hover:text-cyan-400"
+            >
+              <PlusIcon className="h-3 w-3" />
+              New file
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className={fieldClass}>
+        <span className={labelClass}>{activeFile?.path ?? "Code"}</span>
+        <div className="overflow-hidden rounded-lg border border-border bg-surface focus-within:border-cyan-500 dark:focus-within:border-cyan-400">
+          <CodeMirror
+            value={activeFile?.content ?? ""}
+            onChange={updateActiveContent}
+            extensions={[
+              languageForPath(activeFile?.path ?? ""),
+              syntaxHighlighting(isDark ? codeSyntaxColorsDark : codeSyntaxColorsLight),
+              editorChrome,
+              EditorView.lineWrapping,
+            ]}
+            theme="none"
+            basicSetup={{ highlightActiveLine: true }}
+            minHeight="14rem"
+          />
+        </div>
+      </div>
 
       <div className="flex gap-2">
-        <Button variant="primary" size="sm" disabled={busy} onClick={handleSubmit}>
+        <Button variant="primary" size="sm" disabled={busy || !entrypoint} onClick={handleSubmit}>
           Submit source
         </Button>
         {source && (
@@ -345,6 +533,163 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, onS
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+interface ConfigPanelProps {
+  functionId: string;
+  versionId: string;
+  onError: (message: string) => void;
+}
+
+function ConfigPanel({ functionId, versionId, onError }: ConfigPanelProps) {
+  const [config, setConfig] = useState<FunctionVersionConfigResponse | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.getFunctionVersionConfig(functionId, versionId);
+        if (!cancelled) setConfig(data);
+      } catch (err) {
+        if (!cancelled) onError(err instanceof ApiError ? err.message : "Failed to load configuration");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [functionId, versionId, reloadKey, onError]);
+
+  function refresh() {
+    setReloadKey((key) => key + 1);
+  }
+
+  return (
+    <Panel className="flex flex-col gap-4 p-4">
+      <div className="flex items-center gap-2">
+        <KeyIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+        <p className="text-sm font-medium text-foreground">Environment &amp; secrets</p>
+      </div>
+      <p className="text-xs text-muted">
+        Injected into <code className="font-mono">process.env</code> whenever this exact version runs. Secret values
+        are stored encrypted and never shown again after saving - only their reference key is displayed.
+      </p>
+
+      <ConfigList
+        title="Environment variables"
+        entries={config?.envVars.map((v) => ({ key: v.key, display: v.value })) ?? null}
+        placeholderValue="production"
+        onSave={async (key, value) => {
+          await api.upsertFunctionVersionEnvVar(functionId, versionId, key, value);
+          refresh();
+        }}
+        onError={onError}
+      />
+
+      <ConfigList
+        title="Secrets"
+        entries={config?.secrets.map((s) => ({ key: s.key, display: s.secretRef })) ?? null}
+        placeholderValue="super-secret-value"
+        secret
+        onSave={async (key, value) => {
+          await api.upsertFunctionVersionSecret(functionId, versionId, key, value);
+          refresh();
+        }}
+        onError={onError}
+      />
+    </Panel>
+  );
+}
+
+interface ConfigListProps {
+  title: string;
+  entries: { key: string; display: string }[] | null;
+  placeholderValue: string;
+  secret?: boolean;
+  onSave: (key: string, value: string) => Promise<void>;
+  onError: (message: string) => void;
+}
+
+function ConfigList({ title, entries, placeholderValue, secret, onSave, onError }: ConfigListProps) {
+  const [adding, setAdding] = useState(false);
+  const [key, setKey] = useState("");
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function handleSave() {
+    onError("");
+    setBusy(true);
+    try {
+      await onSave(key.trim(), value);
+      setKey("");
+      setValue("");
+      setAdding(false);
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : `Failed to save ${title.toLowerCase()}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <p className="text-xs font-medium text-foreground">{title}</p>
+        {!adding && (
+          <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+            <PlusIcon className="h-3.5 w-3.5" />
+            Add
+          </Button>
+        )}
+      </div>
+
+      {entries === null ? (
+        <p className="px-3 py-3 text-xs text-muted">Loading…</p>
+      ) : entries.length === 0 && !adding ? (
+        <p className="px-3 py-3 text-xs text-muted">None set.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {entries.map((entry) => (
+            <li key={entry.key} className="flex items-center gap-3 px-3 py-2 text-xs">
+              <span className="w-40 shrink-0 truncate font-mono font-medium text-foreground">{entry.key}</span>
+              <span className="truncate font-mono text-muted">{secret ? `configured (${entry.display})` : entry.display}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {adding && (
+        <div className="flex flex-wrap items-end gap-2 border-t border-border px-3 py-2.5">
+          <label className={fieldClass}>
+            <span className={labelClass}>Key</span>
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder="API_KEY"
+              className={`${inputClass} w-40 font-mono text-xs`}
+            />
+          </label>
+          <label className={fieldClass}>
+            <span className={labelClass}>Value</span>
+            <input
+              type={secret ? "password" : "text"}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={placeholderValue}
+              className={`${inputClass} w-48 font-mono text-xs`}
+            />
+          </label>
+          <Button variant="primary" size="sm" disabled={busy || !key.trim()} onClick={handleSave}>
+            Save
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setAdding(false)}>
+            Cancel
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -362,6 +707,43 @@ function TestInvokePanel({ functionId, versionId, onError }: TestInvokePanelProp
   const [initialStatus, setInitialStatus] = useState<string | null>(null);
   const [inspection, setInspection] = useState<InvocationInspectionResponse | null>(null);
   const [inspecting, setInspecting] = useState(false);
+  const currentStatus = inspection?.status ?? initialStatus ?? "PENDING";
+
+  const inputError = useMemo(() => {
+    if (input.trim() === "") return null;
+    try {
+      JSON.parse(input);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Invalid JSON";
+    }
+  }, [input]);
+
+  // Execution is asynchronous (the Dispatcher picks the invocation up off
+  // NATS), so right after Run it's still PENDING. Poll a few times so the
+  // user sees it actually complete instead of assuming it's stuck.
+  useEffect(() => {
+    if (!invocationId) return;
+    let cancelled = false;
+    let attempts = 0;
+    const timer = setInterval(async () => {
+      attempts += 1;
+      try {
+        const data = await api.getInvocation(invocationId);
+        if (cancelled) return;
+        setInspection(data);
+        if (data.status !== "PENDING" || attempts >= 10) {
+          clearInterval(timer);
+        }
+      } catch {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [invocationId]);
 
   async function handleRun() {
     onError("");
@@ -398,23 +780,14 @@ function TestInvokePanel({ functionId, versionId, onError }: TestInvokePanelProp
         <p className="text-sm font-medium text-foreground">Test invoke</p>
       </div>
       <p className="text-xs text-muted">
-        Runs this exact version directly, with no Flow or Gateway involved. The invocation is durably recorded, but
-        (by design, for now) is not picked up by the Dispatcher for real execution - it will stay PENDING.
+        Runs this exact version directly, with no Flow or Gateway involved. Execution happens asynchronously through
+        the same Dispatcher a real request uses - status updates automatically below once it completes.
       </p>
 
-      <label className={fieldClass}>
-        <span className={labelClass}>Input payload (JSON)</span>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          rows={4}
-          spellCheck={false}
-          className={`${inputClass} h-auto resize-y py-2 font-mono text-xs leading-relaxed`}
-        />
-      </label>
+      <JsonEditor value={input} onChange={setInput} error={inputError} />
 
       <div>
-        <Button variant="primary" size="sm" disabled={busy} onClick={handleRun}>
+        <Button variant="primary" size="sm" disabled={busy || !!inputError} onClick={handleRun}>
           <PlayIcon className="h-3.5 w-3.5" />
           Run
         </Button>
@@ -425,8 +798,8 @@ function TestInvokePanel({ functionId, versionId, onError }: TestInvokePanelProp
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs">
               <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-muted">Invocation created</span>
-              <StatusBadge status={initialStatus ?? "PENDING"} />
+              <span className="text-muted">Invocation status</span>
+              <StatusBadge status={currentStatus} />
             </div>
             <Button variant="secondary" size="sm" disabled={inspecting} onClick={handleInspect}>
               Inspect
@@ -460,6 +833,8 @@ function TestInvokePanel({ functionId, versionId, onError }: TestInvokePanelProp
                   </div>
                 )}
               </dl>
+
+              <OutputLog steps={inspection.steps} />
             </div>
           )}
         </div>

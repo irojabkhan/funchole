@@ -61,7 +61,7 @@ class PersistentNodeExecutorTest {
 
         NodeExecutionRequest request = new NodeExecutionRequest(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "GrowUp", "{\"n\":1}");
-        NodeExecutionResult result = executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        NodeExecutionResult result = executor.execute(request, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
         assertTrue(result.success());
         assertEquals("{\"n\":1}", result.output());
@@ -88,7 +88,7 @@ class PersistentNodeExecutorTest {
                 "{}",
                 Map.of("NODE_ENV", "test", "API_TOKEN", "secret-token")
         );
-        NodeExecutionResult result = executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        NodeExecutionResult result = executor.execute(request, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
         assertTrue(result.success());
         assertEquals("{\"nodeEnv\":\"test\",\"apiToken\":\"secret-token\"}", result.output());
@@ -172,7 +172,7 @@ class PersistentNodeExecutorTest {
                 "{}",
                 Map.of("API_TOKEN", "secret-token")
         );
-        NodeExecutionResult firstResult = executor.execute(first).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        NodeExecutionResult firstResult = executor.execute(first, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
         NodeExecutionResult secondResult = execute(artifact, "{}");
 
         assertTrue(firstResult.success());
@@ -188,7 +188,7 @@ class PersistentNodeExecutorTest {
 
         NodeExecutionRequest request = new NodeExecutionRequest(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "NotExported", "{}");
-        NodeExecutionResult result = executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        NodeExecutionResult result = executor.execute(request, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
         assertFalse(result.success());
         assertEquals("HANDLER_NOT_FOUND", result.errorCode());
@@ -282,7 +282,7 @@ class PersistentNodeExecutorTest {
                 .toList();
 
         List<CompletableFuture<NodeExecutionResult>> futures = requests.stream()
-                .map(request -> executor.execute(request).toCompletableFuture())
+                .map(request -> executor.execute(request, logMessage -> { }).toCompletableFuture())
                 .toList();
 
         for (int i = 0; i < requests.size(); i++) {
@@ -303,7 +303,7 @@ class PersistentNodeExecutorTest {
                 .toList();
 
         List<CompletableFuture<NodeExecutionResult>> futures = requests.stream()
-                .map(request -> executor.execute(request).toCompletableFuture())
+                .map(request -> executor.execute(request, logMessage -> { }).toCompletableFuture())
                 .toList();
 
         for (int i = 0; i < requests.size(); i++) {
@@ -326,7 +326,7 @@ class PersistentNodeExecutorTest {
         NodeExecutionRequest request = new NodeExecutionRequest(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "handler", "{}");
 
-        CompletableFuture<NodeExecutionResult> pending = executor.execute(request).toCompletableFuture();
+        CompletableFuture<NodeExecutionResult> pending = executor.execute(request, logMessage -> { }).toCompletableFuture();
         Thread.sleep(100);
         executor.close();
 
@@ -337,7 +337,7 @@ class PersistentNodeExecutorTest {
     private NodeExecutionResult execute(Path artifact, String input) throws Exception {
         NodeExecutionRequest request = new NodeExecutionRequest(
                 UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), artifact, "handler", input);
-        return executor.execute(request).toCompletableFuture().get(5, TimeUnit.SECONDS);
+        return executor.execute(request, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
     }
 
     private Path writeArtifact(String name, String source) throws IOException {

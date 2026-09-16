@@ -2,6 +2,7 @@ package com.funchole.backend.controlplane.controller;
 
 import com.funchole.backend.controlplane.dto.InvocationInspectionResponse;
 import com.funchole.backend.controlplane.dto.InvocationStepInspectionResponse;
+import com.funchole.backend.controlplane.dto.InvocationStepLogResponse;
 import com.funchole.backend.controlplane.security.AppUserPrincipal;
 import com.funchole.backend.controlplane.service.InvocationInspectionAccessService;
 import com.funchole.backend.core.base.response.ApiResponse;
@@ -73,7 +74,10 @@ public class InvocationInspectionController {
                 step.createdAt(),
                 step.updatedAt(),
                 step.startedAt(),
-                step.completedAt()
+                step.completedAt(),
+                step.logs().stream()
+                        .map(log -> new InvocationStepLogResponse(log.stream(), log.message(), log.createdAt()))
+                        .toList()
         );
     }
 }

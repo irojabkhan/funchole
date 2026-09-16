@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.funchole.backend.invocation.CreateInvocationRequest;
 import com.funchole.backend.invocationcontract.DirectInvocationRequest;
 import com.funchole.backend.invocation.Invocation;
+import com.funchole.backend.invocation.InvocationKind;
 import com.funchole.backend.invocation.InvocationMessagingConfig;
 import com.funchole.backend.invocation.InvocationRegistry;
 import com.funchole.backend.invocation.InvocationSnapshot;
@@ -349,6 +350,49 @@ class InvocationDispatcherTest {
         assertEquals(InvocationStepExecutionStatus.COMPLETED, responseExecution.status());
         assertEquals("RESPONSE", responseExecution.componentType());
         assertJsonEquals(responseExecution.result(), completedInvocation.result());
+    }
+
+    @Test
+    void completesDirectFunctionInvocationAfterSingleRuntimeResult() throws Exception {
+        UUID functionId = UUID.fromString("30000000-0000-0000-0000-000000000181");
+        UUID functionVersionId = UUID.fromString("40000000-0000-0000-0000-000000000181");
+        Invocation invocation = invocationRegistry.createDirectInvocation(new DirectInvocationRequest(
+                functionId,
+                "fn_direct_echo",
+                functionVersionId,
+                "NODE",
+                "{\"message\":\"hello\"}"
+        ));
+        EagerCompletingGateway gateway = new EagerCompletingGateway();
+        InvocationDispatcher dispatcher = new InvocationDispatcher(
+                natsConnection,
+                invocationRegistry,
+                stepExecutionRegistry,
+                runtimeRegistry,
+                new ExecutionPlanner(),
+                gateway
+        );
+
+        assertTrue(dispatcher.processNext(Duration.ofSeconds(5)));
+
+        awaitCondition(
+                () -> invocationRegistry.findById(invocation.invocationId()).orElseThrow().status() == InvocationStatus.COMPLETED,
+                Duration.ofSeconds(5)
+        );
+        Invocation completedInvocation = invocationRegistry.findById(invocation.invocationId()).orElseThrow();
+        assertEquals(InvocationKind.DIRECT_FUNCTION, completedInvocation.kind());
+        assertEquals(InvocationStatus.COMPLETED, completedInvocation.status());
+        assertNotNull(completedInvocation.completedAt());
+        assertEquals(functionId, completedInvocation.functionId());
+        assertEquals(functionVersionId, completedInvocation.functionVersionId());
+
+        assertEquals(1, countStepExecutions());
+        InvocationStepExecution execution = firstStepExecution().orElseThrow();
+        assertEquals(InvocationStepExecutionStatus.COMPLETED, execution.status());
+        assertEquals("FUNCTION", execution.componentType());
+        assertEquals(functionId, execution.componentId());
+        assertEquals(functionVersionId, execution.componentVersionId());
+        assertJsonEquals(execution.result(), completedInvocation.result());
     }
 
     @Test
@@ -1416,11 +1460,11 @@ class InvocationDispatcherTest {
         private RuntimeExecutionRequest capturedRequest;
 
         @Override
-        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, java.util.function.Consumer<RuntimeLogEntry> onLog) {
             capturedTarget = target;
             capturedRequest = request;
             requests.add(request);
-            return delegate.handoff(target, request);
+            return delegate.handoff(target, request, onLog);
         }
 
         RuntimeTarget capturedTarget() {
@@ -1452,7 +1496,7 @@ class InvocationDispatcherTest {
         }
 
         @Override
-        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, java.util.function.Consumer<RuntimeLogEntry> onLog) {
             requests.add(request);
             RuntimeExecutionResult terminal = errorCode == null
                     ? RuntimeExecutionResult.success(request.executionId(),
@@ -1477,7 +1521,7 @@ class InvocationDispatcherTest {
     private static final class ExceptionalCompletionGateway implements RuntimeExecutionGateway {
 
         @Override
-        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, java.util.function.Consumer<RuntimeLogEntry> onLog) {
             return new RuntimeExecutionHandle(
                     RuntimeExecutionAcceptance.accept(request.executionId()),
                     java.util.concurrent.CompletableFuture.failedFuture(
@@ -1489,7 +1533,7 @@ class InvocationDispatcherTest {
     private static final class RejectingRuntimeExecutionGateway implements RuntimeExecutionGateway {
 
         @Override
-        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, java.util.function.Consumer<RuntimeLogEntry> onLog) {
             return new RuntimeExecutionHandle(
                     RuntimeExecutionAcceptance.reject(request.executionId(), "simulated handoff rejection"),
                     java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("simulated handoff rejection"))
@@ -1500,7 +1544,7 @@ class InvocationDispatcherTest {
     private static final class ThrowingRuntimeExecutionGateway implements RuntimeExecutionGateway {
 
         @Override
-        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+        public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, java.util.function.Consumer<RuntimeLogEntry> onLog) {
             throw new IllegalStateException("Simulated runtime gateway failure");
         }
     }

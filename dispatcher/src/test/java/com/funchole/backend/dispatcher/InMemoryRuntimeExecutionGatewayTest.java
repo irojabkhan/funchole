@@ -17,7 +17,7 @@ class InMemoryRuntimeExecutionGatewayTest {
     void acceptsCompatibleNodeTargetAndRecordsRequest() throws Exception {
         RuntimeExecutionRequest request = validRequest();
 
-        RuntimeExecutionHandle handle = gateway.handoff(target("NODE"), request);
+        RuntimeExecutionHandle handle = gateway.handoff(target("NODE"), request, entry -> { });
         RuntimeExecutionAcceptance acceptance = handle.acceptance();
 
         assertTrue(acceptance.accepted());
@@ -31,7 +31,7 @@ class InMemoryRuntimeExecutionGatewayTest {
     void rejectsIncompatibleRuntimeTarget() {
         RuntimeExecutionRequest request = validRequest("NODE");
 
-        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("PYTHON"), request).acceptance();
+        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("PYTHON"), request, entry -> { }).acceptance();
 
         assertTrue(!acceptance.accepted());
         assertTrue(acceptance.rejectionReason().contains("not compatible"));
@@ -44,7 +44,7 @@ class InMemoryRuntimeExecutionGatewayTest {
                 null, UUID.randomUUID(), null, null, UUID.randomUUID(), 1,
                 "FUNCTION", UUID.randomUUID(), UUID.randomUUID(), "NODE", "{}");
 
-        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("NODE"), request).acceptance();
+        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("NODE"), request, entry -> { }).acceptance();
 
         assertTrue(!acceptance.accepted());
         assertTrue(acceptance.rejectionReason().contains("executionId is required"));
@@ -56,7 +56,7 @@ class InMemoryRuntimeExecutionGatewayTest {
                 UUID.randomUUID(), UUID.randomUUID(), null, null, UUID.randomUUID(), 1,
                 "FUNCTION", UUID.randomUUID(), null, "NODE", "{}");
 
-        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("NODE"), request).acceptance();
+        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("NODE"), request, entry -> { }).acceptance();
 
         assertTrue(!acceptance.accepted());
         assertTrue(acceptance.rejectionReason().contains("componentVersionId is required"));
@@ -68,7 +68,7 @@ class InMemoryRuntimeExecutionGatewayTest {
                 UUID.randomUUID(), UUID.randomUUID(), null, null, UUID.randomUUID(), 0,
                 "FUNCTION", UUID.randomUUID(), UUID.randomUUID(), "NODE", "{}");
 
-        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("NODE"), request).acceptance();
+        RuntimeExecutionAcceptance acceptance = gateway.handoff(target("NODE"), request, entry -> { }).acceptance();
 
         assertTrue(!acceptance.accepted());
         assertTrue(acceptance.rejectionReason().contains("attempt must be positive"));
@@ -76,7 +76,7 @@ class InMemoryRuntimeExecutionGatewayTest {
 
     @Test
     void rejectsMissingTarget() {
-        RuntimeExecutionAcceptance acceptance = gateway.handoff(null, validRequest("NODE")).acceptance();
+        RuntimeExecutionAcceptance acceptance = gateway.handoff(null, validRequest("NODE"), entry -> { }).acceptance();
 
         assertTrue(!acceptance.accepted());
         assertTrue(acceptance.rejectionReason().contains("Runtime target is required"));
@@ -89,8 +89,8 @@ class InMemoryRuntimeExecutionGatewayTest {
                 first.executionId(), UUID.randomUUID(), null, null, UUID.randomUUID(), 1,
                 "FUNCTION", UUID.randomUUID(), UUID.randomUUID(), "NODE", "{}");
 
-        RuntimeExecutionAcceptance firstAcceptance = gateway.handoff(target("NODE"), first).acceptance();
-        RuntimeExecutionAcceptance secondAcceptance = gateway.handoff(target("NODE"), second).acceptance();
+        RuntimeExecutionAcceptance firstAcceptance = gateway.handoff(target("NODE"), first, entry -> { }).acceptance();
+        RuntimeExecutionAcceptance secondAcceptance = gateway.handoff(target("NODE"), second, entry -> { }).acceptance();
 
         assertTrue(firstAcceptance.accepted());
         assertTrue(secondAcceptance.accepted());

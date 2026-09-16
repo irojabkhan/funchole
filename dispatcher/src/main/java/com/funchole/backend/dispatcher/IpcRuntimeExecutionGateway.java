@@ -20,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,7 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
     }
 
     @Override
-    public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request) {
+    public RuntimeExecutionHandle handoff(RuntimeTarget target, RuntimeExecutionRequest request, Consumer<RuntimeLogEntry> onLog) {
         if (target == null) {
             throw new IllegalArgumentException("Runtime target is required");
         }
@@ -72,7 +73,7 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
                     "Failed to connect to runtime worker socket " + target.socketPath(), exception);
         }
 
-        IpcPendingExecution pending = connection.registerPending(request.executionId());
+        IpcPendingExecution pending = connection.registerPending(request.executionId(), onLog);
         try {
             connection.writeInvoke(IpcInvokeMessage.from(request));
         } catch (IOException exception) {
@@ -163,6 +164,7 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
         private final Object writeLock = new Object();
         private final Map<UUID, CompletableFuture<IpcAcceptedMessage>> pendingAcceptances = new ConcurrentHashMap<>();
         private final Map<UUID, CompletableFuture<RuntimeExecutionResult>> pendingCompletions = new ConcurrentHashMap<>();
+        private final Map<UUID, Consumer<RuntimeLogEntry>> logConsumers = new ConcurrentHashMap<>();
         private volatile boolean open = true;
 
         private IpcConnection(String socketPath, SocketChannel channel, ObjectMapper objectMapper) {
@@ -184,17 +186,21 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
             return open && channel.isOpen();
         }
 
-        IpcPendingExecution registerPending(UUID executionId) {
+        IpcPendingExecution registerPending(UUID executionId, Consumer<RuntimeLogEntry> onLog) {
             CompletableFuture<IpcAcceptedMessage> acceptance = new CompletableFuture<>();
             CompletableFuture<RuntimeExecutionResult> completion = new CompletableFuture<>();
             pendingAcceptances.put(executionId, acceptance);
             pendingCompletions.put(executionId, completion);
+            if (onLog != null) {
+                logConsumers.put(executionId, onLog);
+            }
             return new IpcPendingExecution(acceptance, completion);
         }
 
         void removePending(UUID executionId, IpcPendingExecution pending) {
             pendingAcceptances.remove(executionId, pending.acceptance());
             pendingCompletions.remove(executionId, pending.completion());
+            logConsumers.remove(executionId);
         }
 
         int pendingAcceptanceCount() {
@@ -260,7 +266,32 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
                 handleTerminal(line);
                 return;
             }
+            if (IpcLogMessage.TYPE.equals(type)) {
+                handleLog(line);
+                return;
+            }
             logger.warn("Discarding unsupported IPC response type '{}' on socket {}", type, socketPath);
+        }
+
+        private void handleLog(String line) {
+            IpcLogMessage message;
+            try {
+                message = objectMapper.readValue(line, IpcLogMessage.class);
+            } catch (IOException exception) {
+                logger.warn("Discarding malformed LOG IPC response on socket {}: {}", socketPath, exception.getMessage());
+                return;
+            }
+            if (message.executionId() == null) {
+                logger.warn("Discarding LOG IPC response with no executionId on socket {}", socketPath);
+                return;
+            }
+            Consumer<RuntimeLogEntry> consumer = logConsumers.get(message.executionId());
+            if (consumer == null) {
+                // No listener registered (already terminal, or handoff never
+                // registered one) - logs are best-effort, silently drop.
+                return;
+            }
+            consumer.accept(new RuntimeLogEntry(message.executionId(), message.stream(), message.message()));
         }
 
         private void handleAccepted(String line) {
@@ -298,6 +329,7 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
                 return;
             }
             CompletableFuture<RuntimeExecutionResult> future = pendingCompletions.remove(message.executionId());
+            logConsumers.remove(message.executionId());
             if (future == null) {
                 logger.warn(
                         "Received terminal IPC response for unknown or already-completed executionId={} on socket {}",
@@ -313,6 +345,7 @@ public final class IpcRuntimeExecutionGateway implements RuntimeExecutionGateway
             pendingCompletions.forEach((executionId, future) -> future.completeExceptionally(failure));
             pendingAcceptances.clear();
             pendingCompletions.clear();
+            logConsumers.clear();
         }
     }
 

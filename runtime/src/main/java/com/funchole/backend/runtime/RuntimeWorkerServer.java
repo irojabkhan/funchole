@@ -293,12 +293,33 @@ public final class RuntimeWorkerServer implements AutoCloseable {
                 payload.environment()
         );
 
-        nodeExecutor.execute(nodeRequest).whenComplete((result, failure) -> {
-            RuntimeTerminalMessage terminalMessage = failure != null
-                    ? RuntimeTerminalMessage.error(message.executionId(), "NODE_EXECUTOR_UNAVAILABLE", failure.getMessage())
-                    : RuntimeTerminalMessage.from(result);
-            distributeTerminal(state, terminalMessage);
-        });
+        nodeExecutor.execute(nodeRequest, nodeLogMessage -> distributeLog(state, nodeLogMessage))
+                .whenComplete((result, failure) -> {
+                    RuntimeTerminalMessage terminalMessage = failure != null
+                            ? RuntimeTerminalMessage.error(message.executionId(), "NODE_EXECUTOR_UNAVAILABLE", failure.getMessage())
+                            : RuntimeTerminalMessage.from(result);
+                    distributeTerminal(state, terminalMessage);
+                });
+    }
+
+    /**
+     * Delivers one line of runtime console output to every connection
+     * currently registered for this execution - best-effort, like
+     * {@link #distributeTerminal}, but never marks anything terminal and can
+     * fire any number of times before it.
+     */
+    private void distributeLog(WorkerExecutionState state, NodeLogMessage nodeLogMessage) {
+        RuntimeLogMessage logMessage = RuntimeLogMessage.from(nodeLogMessage);
+        for (OutputStream target : List.copyOf(state.receivers())) {
+            try {
+                writeJson(target, logMessage);
+            } catch (IOException exception) {
+                logger.debug(
+                        "Failed to write LOG runtime message for executionId={} to a connection: {}",
+                        logMessage.executionId(), exception.getMessage()
+                );
+            }
+        }
     }
 
     /**

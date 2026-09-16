@@ -32,10 +32,17 @@ public class InvocationInspectionHandoffConfig {
     }
 
     @Bean
+    InvocationStepExecutionLogRegistry invocationStepExecutionLogRegistry(DataSource dataSource) {
+        return new JdbcInvocationStepExecutionLogRegistry(dataSource);
+    }
+
+    @Bean
     InvocationInspectionHandoff invocationInspectionHandoff(
             InvocationInspectionService invocationInspectionService,
-            InvocationStepExecutionRegistry invocationStepExecutionRegistry
+            InvocationStepExecutionRegistry invocationStepExecutionRegistry,
+            InvocationStepExecutionLogRegistry invocationStepExecutionLogRegistry
     ) {
-        return new InvocationRegistryInvocationInspectionHandoff(invocationInspectionService, invocationStepExecutionRegistry);
+        return new InvocationRegistryInvocationInspectionHandoff(
+                invocationInspectionService, invocationStepExecutionRegistry, invocationStepExecutionLogRegistry);
     }
 }
