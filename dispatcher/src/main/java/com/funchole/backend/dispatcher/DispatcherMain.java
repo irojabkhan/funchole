@@ -29,6 +29,10 @@ public final class DispatcherMain {
         IpcRuntimeExecutionGateway executionGateway = new IpcRuntimeExecutionGateway(
                 Duration.ofMillis(readInt("RUNTIME_IPC_ACCEPT_TIMEOUT_MS", 3000))
         );
+        FunctionSecretReader secretReader = new OpenBaoFunctionSecretReader(
+                readString("BAO_ADDR", "http://localhost:8200"),
+                readString("BAO_TOKEN", "root")
+        );
         InvocationDispatcher dispatcher = new InvocationDispatcher(
                 natsConnection,
                 new JdbcInvocationRegistry(dataSource, new NatsJetStreamInvocationEventPublisher(natsConnection)),
@@ -36,13 +40,8 @@ public final class DispatcherMain {
                 createRuntimeRegistry(dataSource),
                 new ExecutionPlanner(),
                 executionGateway,
-                new JdbcFunctionVersionEnvironmentResolver(
-                        dataSource,
-                        new OpenBaoFunctionSecretReader(
-                                readString("BAO_ADDR", "http://localhost:8200"),
-                                readString("BAO_TOKEN", "root")
-                        )
-                ),
+                new JdbcFunctionVersionEnvironmentResolver(dataSource, secretReader),
+                new JdbcFunctionVersionDatabaseResolver(dataSource, secretReader),
                 new JdbcInvocationStepExecutionLogRegistry(dataSource)
         );
         Duration pollTimeout = Duration.ofMillis(readInt("DISPATCHER_POLL_TIMEOUT_MS", 1000));

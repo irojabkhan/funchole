@@ -86,7 +86,8 @@ class PersistentNodeExecutorTest {
                 artifact,
                 "handler",
                 "{}",
-                Map.of("NODE_ENV", "test", "API_TOKEN", "secret-token")
+                Map.of("NODE_ENV", "test", "API_TOKEN", "secret-token"),
+                List.of()
         );
         NodeExecutionResult result = executor.execute(request, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
 
@@ -170,7 +171,8 @@ class PersistentNodeExecutorTest {
                 artifact,
                 "handler",
                 "{}",
-                Map.of("API_TOKEN", "secret-token")
+                Map.of("API_TOKEN", "secret-token"),
+                List.of()
         );
         NodeExecutionResult firstResult = executor.execute(first, logMessage -> { }).toCompletableFuture().get(5, TimeUnit.SECONDS);
         NodeExecutionResult secondResult = execute(artifact, "{}");

@@ -30,7 +30,7 @@ This PRD converts the audit and the F001–F350 (+F351) master backlog into one 
 - acceptance criteria;
 - progress scoring;
 - explicit dependencies;
-- a complete F001–F350 (+F351) tracking matrix.
+- a complete F001–F350 (+F351, +F352) tracking matrix.
 
 ---
 
@@ -115,21 +115,21 @@ This document uses a feature-level implementation score:
 
 ### 3.1 Current baseline
 
-**Last recalculated:** 2026-09-16, after GAP-17/GAP-18/GAP-19 were found live by the user and then fixed (not just found) in the same session.
+**Last recalculated:** 2026-09-16, after GAP-17/GAP-18/GAP-19 were found live by the user and then fixed (not just found) in the same session, plus the new managed Database resource feature (F352).
 
-- **Master backlog completion:** **45.0%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0%, EPIC-02 through GAP-17/18/19 fixes)
+- **Master backlog completion:** **45.2%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0% → 45.2%, EPIC-02 through GAP-17/18/19 fixes, plus F352)
 - **First human zero-to-running lifecycle scope:** **49.9%** *(pending full recompute — see §18 note)*
 - **MVP/product-oriented scope:** **39.7%** *(pending full recompute — see §18 note)*
 - **Agent/MCP scope:** **1.8%**
-- **Master backlog remaining:** **55.0%** (was 55.6% pre-fix)
+- **Master backlog remaining:** **54.8%** (was 55.0% pre-F352)
 
-Status count across all 351 features (350 original + F351, added 2026-09-16 for GAP-18):
+Status count across all 352 features (350 original + F351 added 2026-09-16 for GAP-18, + F352 added 2026-09-16 for the managed Database resource feature):
 
-- **COMPLETE:** 128 (was 124; +F180, +F182, +F184 fixed by GAP-17/19, +F351 new)
+- **COMPLETE:** 129 (was 128; +F352 new)
 - **INTERNAL_ONLY:** 6 (unchanged)
-- **PARTIAL:** 51 (was 53; -F180, -F182 moved to COMPLETE)
+- **PARTIAL:** 51 (unchanged)
 - **DECISION_REQUIRED:** 7 (unchanged)
-- **MISSING:** 159 (was 160; -F184 moved to COMPLETE)
+- **MISSING:** 159 (unchanged)
 
 > **Note on this correction (2026-09-16):** The STORY-M2-02 PRD update marked F180 (Test invoke panel) and F173–F178 COMPLETE and left F181–F190 (Flow/Gateway/domain UI) at their old MISSING/0% status with a note calling them "not audited, out of scope." The user then hit two real problems live: Test invoke creates an invocation that never executes (it stays PENDING forever - the direct-invoke path was never wired to the Dispatcher, only the Gateway's HTTP-triggered path was), and the Flow step editor has no Function/FunctionVersion picker, just raw UUID text boxes. Auditing in response found a third, unrelated gap: the Function workspace has no UI at all for environment variables/secrets, despite that backend being 100% done. The audit also found the "not audited, out of scope" claim itself was wrong in the other direction - F181 (Flow list), F183 (visual step canvas) and F186 (Gateway+Domain CRUD) were already substantially built pre-session and are now confirmed COMPLETE; F182/F187 are PARTIAL. See GAP-17, GAP-18, GAP-19 for full detail. Net effect: F180 downgraded (COMPLETE → PARTIAL), F181/F186 upgraded to COMPLETE, F182/F183/F187 upgraded to PARTIAL, F184/F185/F188/F189/F190 confirmed still MISSING.
 
@@ -1129,14 +1129,16 @@ Parallel work is allowed only where it does not change these contracts.
 
 **User story:** Functions receive secure runtime configuration
 
-**Tracked features:** F238–F245  
-**Current planning score:** **81.2%**  
-**Feature count:** 8  
-**Complete features:** 6/8
+**Tracked features:** F238–F245, F352  
+**Current planning score:** **83.3%**  
+**Feature count:** 9  
+**Complete features:** 7/9
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
 **Status:** Runtime injection delivered 2026-09-15 — `FunctionVersionConfigController` exposes authenticated get/upsert APIs under the exact FunctionVersion resource. `function_version_env_vars` stores plain non-secret values in PostgreSQL. `function_version_secrets` stores only OpenBao secret references, while `OpenBaoFunctionSecretStore` writes the actual secret value to OpenBao. Dispatcher resolves the exact FunctionVersion environment, reads secret values through OpenBao, sends the resolved map over IPC, and the Node Runtime injects it into `process.env` for the artifact handler. Secret redaction, rotation, resource governance, and network-policy hardening remain future work.
+
+**Status (2026-09-16 — new Database resource, F352):** Following a design discussion about shared/warm DB connections across Functions, built a first-class `Database` resource so FuncHole - not the function author - owns the connection. A `Database` (top-level, owned by `AppUser`, like `Function`) stores host/port/credentials; the password is written to OpenBao via a new `FunctionSecretStore.saveForDatabase(databaseId, key, value)` method (never stored in Postgres, matching the existing `function_version_secrets` discipline) and referenced by `password_secret_ref`. A new many-to-many `function_version_database_attachments` join table lets a FunctionVersion attach zero or more Databases (`PUT`/`DELETE`/`GET` under `/api/v1/functions/{functionId}/versions/{versionId}/databases`). At invocation time, a new `JdbcFunctionVersionDatabaseResolver` (dispatcher module) resolves the attached databases (joining `function_version_database_attachments` ⋈ `databases`, reading the password back from OpenBao) into a new `DatabaseConnectionInfo` record, threaded through the full Dispatcher → Runtime Worker → Node executor IPC chain (`RuntimeExecutionRequest` → `IpcInvokePayload` → `RuntimeInvokePayload` → `NodeExecutionRequest` → `NodeExecuteMessage`, each side of the process boundary independently declaring the same field, matching the existing `environment` field's pattern - no shared Java types across the boundary). `executor.mjs` now calls `handler(input, context)` (a non-breaking second argument - existing single-argument handlers are unaffected) where `context.db(name)` returns a warm `pg.Pool`, cached per distinct database resource for the life of the Node process (added the `pg` npm dependency under `runtime/node/`, wired into the Docker image's `runtime-worker` stage via `npm ci`). Database passwords are added to the existing console-log redactor alongside secrets. Scope, confirmed with the user before building: all four engines (Postgres, Supabase, MongoDB, MySQL) are intended, but only **Postgres, external connections only** is built now - internal/Docker-provisioned databases and the other three engines are deliberately deferred, with the schema (`databases.type` as a plain extensible VARCHAR) and the resolver/executor scaffolding built to add them later without a redesign. Frontend: a new `/databases` CRUD page (mirroring the existing Functions page exactly) plus a "Databases" panel on the FunctionVersion detail page (attach/detach, mirroring the existing "Environment & secrets" panel). Live-verified end-to-end against the real running dev stack: created a `devdb` Database pointed at the dev Postgres container, attached it to a real FunctionVersion, deployed, and invoked a function whose handler ran `context.db("devdb").query(...)` - both through `curl` and through the actual browser UI - confirming a real SQL round-trip (`{"row": {"db": "funchole", "sum": 2}}`) and pool reuse across repeated invocations (no new Node executor process per call).
 
 #### Tasks
 
@@ -1153,6 +1155,14 @@ Parallel work is allowed only where it does not change these contracts.
   - [ ] outbound policy
   - [ ] DNS/network access rules
   - [ ] build-network policy
+- [~] **T04 — Managed Database resource**
+  - [x] `Database` resource CRUD (external Postgres connections only)
+  - [x] password stored via OpenBao, never plaintext in Postgres
+  - [x] FunctionVersion↔Database attachment (many-to-many)
+  - [x] warm connection pooling via `context.db(name)`, non-breaking handler signature
+  - [x] Databases web UI + FunctionVersion attachment panel
+  - [ ] internal/Docker-provisioned databases
+  - [ ] MySQL/MongoDB/Supabase-client engines
 
 #### Feature tracking
 
@@ -1166,6 +1176,7 @@ Parallel work is allowed only where it does not change these contracts.
 | F243 | Non-secret environment variables | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
 | F244 | Outbound network policy | MISSING | P2 | M5 — Product hardening | 0% |
 | F245 | Runtime DNS/network access | PARTIAL | P2 | M5 — Product hardening | 50% |
+| F352 | Managed Database resource (`context.db()`) | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
 
 ### EPIC-19 — Observability
 
@@ -2043,7 +2054,7 @@ They remain fully tracked in F321–F343 and F335–F338.
 
 ---
 
-## 16. Complete F001–F350 (+F351) master tracking matrix
+## 16. Complete F001–F350 (+F351, +F352) master tracking matrix
 
 This is the authoritative checklist for this PRD.
 
@@ -2295,6 +2306,7 @@ This is the authoritative checklist for this PRD.
 | F243 | Configuration | Non-secret environment variables | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
 | F244 | Networking | Outbound network policy | MISSING | 0% | P2 | M5 — Product hardening |
 | F245 | Networking | Runtime DNS/network access | PARTIAL | 50% | P2 | M5 — Product hardening |
+| F352 | Database | Managed Database resource (`context.db()`) | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
 | F246 | Observability | Invocation structured logs | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
 | F247 | Observability | Function stdout/stderr capture | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
 | F248 | Observability | Logs persisted/queryable | MISSING | 0% | P1 | M1 — Human zero-to-running |
@@ -2417,6 +2429,7 @@ This is the authoritative checklist for this PRD.
 | Certificate | 5 | 70.0% |
 | Configuration | 1 | 100.0% |
 | Controlplane API | 17 | 67.6% |
+| Database | 1 | 100.0% |
 | DNS | 1 | 100.0% |
 | Developer UX | 6 | 33.3% |
 | Dispatcher | 10 | 75.0% |
@@ -2462,15 +2475,17 @@ This is the authoritative checklist for this PRD.
 
 ### Overall
 
-- **351 / 351** master backlog candidates are represented in this PRD (F001–F350, plus F351 added 2026-09-16 - see GAP-18 and the note below).
-- **Current master-backlog implementation score:** **45.0%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0%, EPIC-02 through GAP-17/18/19 fixes)
-- **Remaining master-backlog scope by score:** **55.0%**
+- **352 / 352** master backlog candidates are represented in this PRD (F001–F350, plus F351 added 2026-09-16 - see GAP-18 and the note below - plus F352 added 2026-09-16 for the new managed Database resource feature).
+- **Current master-backlog implementation score:** **45.2%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0% → 45.2%, EPIC-02 through GAP-17/18/19 fixes, plus F352)
+- **Remaining master-backlog scope by score:** **54.8%**
 - **First human zero-to-running lifecycle score:** **49.9%** *(not yet recalculated — see note below)*
 - **Agent/MCP score:** **1.8%**
 
 > **Note on this update (2026-09-15):** M1 is fully shipped (all 10 stories), and M2 (Controlplane Web) has now started with **STORY-M2-02 (Function workspace)**. Scoping it first surfaced that STORY-M2-01 (Web shell) was already built and working - not by this session, but verified live (login, session, typed API client, nav) - so the story list reflects that as already done rather than reopening it. The Function workspace itself (`/functions`, `/functions/[id]`, `/functions/[id]/versions/[id]`) is now built and live-verified end-to-end: create Function → draft version → source editor (upload or paste-and-edit) → deploy to a real READY artifact → direct test invocation → inspect the resulting invocation via STORY-M1-09's endpoint - reusing the shell's existing design system/components exactly, in both light and dark mode. This closed **F173–F178** and, as a necessary side effect, **F116/F117** (direct invocation had a tested service but no REST transport until now) via a new `POST /api/v1/functions/{functionId}/versions/{versionId}/invoke`. **F179** (build log viewer) is only PARTIAL - deploy failures show their build error transiently in the session that triggered them, nothing persisted/queryable, matching the backend's own F044/F045 gap. Two real bugs were found and fixed live, not part of any story's original scope: **GAP-16** (`InvocationInspectionAccessService.inspect()` threw `LazyInitializationException` on a real HTTP request despite its own test suite passing, since those tests are `@Transactional` and a real request isn't - fixed by adding the same annotation), and a frontend source-editor race (it decided whether to show itself before its initial fetch had resolved, so it always opened at least once regardless of whether source already existed - fixed by gating that decision on the fetch settling).
 >
 > **Correction and fixes (2026-09-16):** STORY-M2-02's own update was wrong in two directions, both found live by the user testing the shipped feature, not by this session's own review - and then fixed in the same session, not just documented. (1) **GAP-17**: the Test invoke panel (F180) created a durable Invocation that never executed. Root cause had two layers. First, `InvocationHandoffConfig` (invocation module) wired the direct-invoke path to a `NoopInvocationEventPublisher` instead of the real NATS-backed one Gateway/Dispatcher already use - fixed by wiring a real `NatsJetStreamInvocationEventPublisher`, made lazy (`@Lazy` Spring beans) so the rest of controlplane's test suite, which never triggers a direct invocation, never opens a NATS connection at Spring context startup. Second, once that was fixed, the Dispatcher's `InvocationDispatcher.onStepTerminal()` turned out to only mark an Invocation COMPLETED when its terminal step was RESPONSE-typed - a direct invocation's single synthetic step is FUNCTION-typed, so the step itself completed but the parent Invocation stayed PENDING forever regardless, a second bug nobody had found before because GAP-17's first layer had always blocked the code from reaching it. Fixed by also treating any completed step of a DIRECT_FUNCTION-kind invocation as terminal. F180 restored to COMPLETE. (2) An audit of F181–F190 (Flow/Gateway/domain UI), prompted by the user separately hitting a raw-UUID step editor, found the original "not audited, out of scope" note undersold what already existed: the Flow list (**F181**), Flow/step editor, and visual step canvas (**F183**), plus Gateway and Domain CRUD (**F186**), were already substantially built pre-session - now COMPLETE or PARTIAL instead of MISSING. What the audit did confirm genuinely missing was **F184**: no Function/FunctionVersion (or Flow/FlowVersion, for SUB_FLOW steps) picker in the Flow step editor, just raw UUID text boxes - fixed with a `ComponentPicker` (name-based dropdowns, filtered to READY FunctionVersions / ADOPTED FlowVersions), F184 now COMPLETE, F182 raised to COMPLETE alongside it. (3) **GAP-18**, found the same way: the Function workspace had zero UI for environment variables/secrets despite a fully complete backend (F238–F243) - built an "Environment & secrets" panel (env vars show their value; secrets show only their opaque `secretRef`, never a plaintext value), tracked as new feature **F351** since no F-ID existed for it at all. All three fixes live-verified end-to-end against the real running dev stack (real NATS, real Dispatcher, real Postgres) - not mocked. The master backlog score above and the status counts are recalculated from the F001–F350(+F351) table (verified by parsing it programmatically). The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
+>
+> **New feature (2026-09-16): managed Database resource, F352.** Prompted by a design discussion about shared/warm DB connections across Functions (opening a connection per invocation doesn't scale, and multiple Functions often need the same connection), built a first-class `Database` resource - scoped and confirmed with the user before implementation (all four engines - Postgres/Supabase/MongoDB/MySQL - are the intended eventual scope; **Postgres, external connections only** is what's actually built now). FuncHole owns the connection, not the function author: a `Database` (top-level resource, like `Function`) stores host/port/credentials with the password held only in OpenBao; a FunctionVersion attaches zero or more Databases via a new many-to-many join table; at invocation time the Dispatcher resolves attached databases (password included, read back from OpenBao) and threads them through the existing IPC chain exactly like `environment` already is (each of the three module boundaries - dispatcher, runtime, and the final Node stdin JSON - independently declaring the same `databases` field, no shared Java type, matching this codebase's established IPC pattern). The Node executor exposes a non-breaking `handler(input, context)` second argument, where `context.db(name)` returns a `pg.Pool` cached for the life of the warm Node process - so repeated invocations of the same (or a different) Function reuse the same pool rather than reconnecting. Shipped with a `/databases` CRUD page and a FunctionVersion attachment panel in the web UI, mirroring existing pages/panels exactly. Live-verified end-to-end against the real dev stack, through both `curl` and the browser: created a Database pointed at the dev Postgres container, attached it to a real FunctionVersion, deployed, and invoked a function whose handler ran a real SQL query through `context.db(...)` - confirmed the correct result and pool reuse across repeated invocations. Tracked as **F352** under EPIC-18 (Configuration, Secrets & Networking), which had no existing F-ID for this capability.
 
 ### What the percentage does *not* mean
 

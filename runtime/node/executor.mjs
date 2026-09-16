@@ -14,9 +14,58 @@ import { createInterface } from "node:readline";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { inspect } from "node:util";
+import pg from "pg";
 
 const rl = createInterface({ input: process.stdin, terminal: false });
 let executionQueue = Promise.resolve();
+
+// Warm connection pools, one per distinct database resource, kept alive for
+// the life of this process (see the module header comment) and reused across
+// every execution that attaches the same Database - this is what lets
+// function authors get a ready client from context.db(name) without paying a
+// per-invocation connection cost.
+const databasePoolCache = new Map();
+
+function databasePoolKey(database) {
+  return `${database.type}:${database.host}:${database.port}:${database.databaseName}:${database.username}`;
+}
+
+function getOrCreateDatabasePool(database) {
+  const key = databasePoolKey(database);
+  let pool = databasePoolCache.get(key);
+  if (pool) {
+    return pool;
+  }
+
+  const type = String(database.type || "").toUpperCase();
+  if (type !== "POSTGRES") {
+    throw new Error(`Unsupported database type: ${database.type}`);
+  }
+
+  pool = new pg.Pool({
+    host: database.host,
+    port: database.port,
+    database: database.databaseName,
+    user: database.username,
+    password: database.password,
+    ssl: database.sslEnabled ? { rejectUnauthorized: false } : false,
+  });
+  databasePoolCache.set(key, pool);
+  return pool;
+}
+
+function buildInvocationContext(databases) {
+  const byName = new Map(databases.map((database) => [database.name, database]));
+  return {
+    db(name) {
+      const database = byName.get(name);
+      if (!database) {
+        throw new Error(`No database attached with name: ${name}`);
+      }
+      return getOrCreateDatabasePool(database);
+    },
+  };
+}
 
 function writeMessage(message) {
   process.stdout.write(JSON.stringify(message) + "\n");
@@ -34,6 +83,7 @@ async function handleExecute(message) {
   const { executionId, artifactPath, input } = message;
   const handlerName = message.handler || "handler";
   const environment = message.environment || {};
+  const databases = message.databases || [];
 
   if (!artifactPath || !existsSync(artifactPath)) {
     sendError(executionId, "ARTIFACT_NOT_FOUND", `Artifact not found: ${artifactPath}`);
@@ -62,9 +112,11 @@ async function handleExecute(message) {
     return;
   }
 
+  const invocationContext = buildInvocationContext(databases);
+
   let output;
   try {
-    output = await withExecutionContext(executionId, environment, () => handler(parsedInput));
+    output = await withExecutionContext(executionId, environment, databases, () => handler(parsedInput, invocationContext));
   } catch (error) {
     sendError(executionId, "ARTIFACT_EXECUTION_ERROR", error && error.message ? error.message : String(error));
     return;
@@ -81,7 +133,7 @@ async function handleExecute(message) {
   writeMessage({ type: "RESULT", executionId, output: serializedOutput });
 }
 
-async function withExecutionContext(executionId, environment, callback) {
+async function withExecutionContext(executionId, environment, databases, callback) {
   const previous = new Map();
   const originalConsole = {
     log: console.log,
@@ -90,7 +142,7 @@ async function withExecutionContext(executionId, environment, callback) {
     error: console.error,
     debug: console.debug,
   };
-  const redactor = createRedactor(environment);
+  const redactor = createRedactor(environment, databases);
   for (const [key, value] of Object.entries(environment)) {
     previous.set(key, Object.prototype.hasOwnProperty.call(process.env, key) ? process.env[key] : undefined);
     process.env[key] = String(value);
@@ -127,10 +179,15 @@ function formatArgs(args) {
   return args.map((arg) => typeof arg === "string" ? arg : inspect(arg, { depth: 6, breakLength: Infinity })).join(" ");
 }
 
-function createRedactor(environment) {
+function createRedactor(environment, databases) {
   const secrets = Object.values(environment)
     .map((value) => String(value))
     .filter((value) => value.length >= 4);
+  for (const database of databases) {
+    if (database.password && String(database.password).length >= 4) {
+      secrets.push(String(database.password));
+    }
+  }
 
   return (message) => {
     let redacted = message;

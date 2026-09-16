@@ -75,6 +75,7 @@ ENTRYPOINT ["/opt/funchole/entrypoint.sh"]
 FROM runtime-node-base AS runtime-worker
 COPY --from=build-runtime /workspace/runtime/build/libs/funchole-runtime.jar app.jar
 COPY runtime/node /app/node
+RUN cd /app/node && npm ci --no-audit --no-fund --omit=dev
 COPY runtime/artifacts /app/artifacts
 ENV NODE_EXECUTOR_SCRIPT_PATH=/app/node/executor.mjs
 ENV ARTIFACT_DIR=/app/artifacts/dev

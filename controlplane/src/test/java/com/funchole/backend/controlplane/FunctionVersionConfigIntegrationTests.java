@@ -214,6 +214,12 @@ class FunctionVersionConfigIntegrationTests {
             return "function-versions/" + functionVersionId + "/secrets/" + key;
         }
 
+        @Override
+        public String saveForDatabase(UUID databaseId, String key, String value) {
+            values.put(cacheKey(databaseId, key), value);
+            return "databases/" + databaseId + "/" + key;
+        }
+
         String valueFor(UUID functionVersionId, String key) {
             return values.get(cacheKey(functionVersionId, key));
         }

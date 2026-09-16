@@ -3,6 +3,9 @@ import type {
   ApiErrorResponse,
   ApiResponse,
   AuthTokenResponse,
+  DatabaseCreateRequest,
+  DatabaseResponse,
+  DatabaseUpdateRequest,
   DirectFlowInvocationResponse,
   DirectInvocationResponse,
   DomainCreateRequest,
@@ -20,6 +23,7 @@ import type {
   FunctionUpdateRequest,
   FunctionVersionConfigResponse,
   FunctionVersionCreateRequest,
+  FunctionVersionDatabaseAttachmentResponse,
   FunctionVersionFullSourceResponse,
   FunctionVersionResponse,
   FunctionVersionSourceResponse,
@@ -358,6 +362,53 @@ export const api = {
     return request(`/api/v1/functions/${functionId}/versions/${versionId}/config/secrets/${encodeURIComponent(key)}`, {
       method: "PUT",
       body: JSON.stringify({ value }),
+    });
+  },
+
+  listDatabases(page: number, size: number): Promise<PaginationResponse<DatabaseResponse>> {
+    return request(`/api/v1/databases?page=${page}&size=${size}`);
+  },
+
+  getDatabase(id: string): Promise<DatabaseResponse> {
+    return request(`/api/v1/databases/${id}`);
+  },
+
+  createDatabase(payload: DatabaseCreateRequest): Promise<DatabaseResponse> {
+    return request("/api/v1/databases", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  updateDatabase(id: string, payload: DatabaseUpdateRequest): Promise<DatabaseResponse> {
+    return request(`/api/v1/databases/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+  },
+
+  deleteDatabase(id: string): Promise<Record<string, string>> {
+    return request(`/api/v1/databases/${id}`, { method: "DELETE" });
+  },
+
+  listFunctionVersionDatabases(
+    functionId: string,
+    versionId: string
+  ): Promise<FunctionVersionDatabaseAttachmentResponse[]> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/databases`);
+  },
+
+  attachFunctionVersionDatabase(
+    functionId: string,
+    versionId: string,
+    databaseId: string
+  ): Promise<FunctionVersionDatabaseAttachmentResponse[]> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/databases/${databaseId}`, {
+      method: "PUT",
+    });
+  },
+
+  detachFunctionVersionDatabase(
+    functionId: string,
+    versionId: string,
+    databaseId: string
+  ): Promise<FunctionVersionDatabaseAttachmentResponse[]> {
+    return request(`/api/v1/functions/${functionId}/versions/${versionId}/databases/${databaseId}`, {
+      method: "DELETE",
     });
   },
 };

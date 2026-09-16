@@ -1,5 +1,6 @@
 package com.funchole.backend.runtime;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 
@@ -19,9 +20,11 @@ record RuntimeInvokePayload(
         UUID componentVersionId,
         String runtimeType,
         String input,
-        Map<String, String> environment
+        Map<String, String> environment,
+        List<DatabaseConnectionInfo> databases
 ) {
     public RuntimeInvokePayload {
         environment = environment == null ? Map.of() : Map.copyOf(environment);
+        databases = databases == null ? List.of() : List.copyOf(databases);
     }
 }

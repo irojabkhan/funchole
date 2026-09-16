@@ -1,5 +1,6 @@
 package com.funchole.backend.runtime;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 
@@ -15,7 +16,8 @@ record NodeExecuteMessage(
         String artifactPath,
         String handler,
         String input,
-        Map<String, String> environment
+        Map<String, String> environment,
+        List<DatabaseConnectionInfo> databases
 ) {
 
     static final String TYPE = "EXECUTE";
@@ -29,7 +31,8 @@ record NodeExecuteMessage(
                 request.artifactPath().toString(),
                 request.handler(),
                 request.input(),
-                request.environment()
+                request.environment(),
+                request.databases()
         );
     }
 }

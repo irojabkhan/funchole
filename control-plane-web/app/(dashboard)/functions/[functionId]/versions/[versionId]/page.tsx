@@ -26,13 +26,17 @@ import {
   ZapIcon,
   CheckIcon,
   KeyIcon,
+  DatabaseIcon,
   PlusIcon,
+  TrashIcon,
   XIcon,
 } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type {
+  DatabaseResponse,
   FunctionResponse,
   FunctionVersionConfigResponse,
+  FunctionVersionDatabaseAttachmentResponse,
   FunctionVersionResponse,
   FunctionVersionSourceResponse,
   InvocationInspectionResponse,
@@ -185,6 +189,8 @@ export default function FunctionVersionDetailPage() {
       />
 
       <ConfigPanel functionId={functionId} versionId={versionId} onError={setError} />
+
+      <DatabasesPanel functionId={functionId} versionId={versionId} onError={setError} />
 
       {version.status === "READY" && (
         <TestInvokePanel functionId={functionId} versionId={versionId} onError={setError} />
@@ -691,6 +697,130 @@ function ConfigList({ title, entries, placeholderValue, secret, onSave, onError 
         </div>
       )}
     </div>
+  );
+}
+
+interface DatabasesPanelProps {
+  functionId: string;
+  versionId: string;
+  onError: (message: string) => void;
+}
+
+function DatabasesPanel({ functionId, versionId, onError }: DatabasesPanelProps) {
+  const [attached, setAttached] = useState<FunctionVersionDatabaseAttachmentResponse[] | null>(null);
+  const [available, setAvailable] = useState<DatabaseResponse[] | null>(null);
+  const [selected, setSelected] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [attachments, databases] = await Promise.all([
+          api.listFunctionVersionDatabases(functionId, versionId),
+          api.listDatabases(1, 100),
+        ]);
+        if (!cancelled) {
+          setAttached(attachments);
+          setAvailable(databases.items);
+        }
+      } catch (err) {
+        if (!cancelled) onError(err instanceof ApiError ? err.message : "Failed to load databases");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [functionId, versionId, reloadKey, onError]);
+
+  function refresh() {
+    setReloadKey((key) => key + 1);
+  }
+
+  async function handleAttach() {
+    if (!selected) return;
+    onError("");
+    setBusy(true);
+    try {
+      await api.attachFunctionVersionDatabase(functionId, versionId, selected);
+      setSelected("");
+      refresh();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Failed to attach database");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDetach(databaseId: string) {
+    onError("");
+    try {
+      await api.detachFunctionVersionDatabase(functionId, versionId, databaseId);
+      refresh();
+    } catch (err) {
+      onError(err instanceof ApiError ? err.message : "Failed to detach database");
+    }
+  }
+
+  const attachableDatabases = (available ?? []).filter(
+    (db) => !attached?.some((a) => a.databaseId === db.id)
+  );
+
+  return (
+    <Panel className="flex flex-col gap-4 p-4">
+      <div className="flex items-center gap-2">
+        <DatabaseIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
+        <p className="text-sm font-medium text-foreground">Databases</p>
+      </div>
+      <p className="text-xs text-muted">
+        Attach a managed database and call{" "}
+        <code className="font-mono">context.db(&quot;name&quot;)</code> from the handler to get a warm, ready
+        connection - the function never builds it itself.
+      </p>
+
+      <div className="rounded-lg border border-border">
+        {attached === null ? (
+          <p className="px-3 py-3 text-xs text-muted">Loading…</p>
+        ) : attached.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-muted">No databases attached.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {attached.map((a) => (
+              <li key={a.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+                <span className="w-40 shrink-0 truncate font-mono font-medium text-foreground">{a.databaseName}</span>
+                <span className="flex-1 truncate text-muted">{a.databaseType}</span>
+                <Button variant="danger" size="icon" title="Detach" onClick={() => handleDetach(a.databaseId)}>
+                  <TrashIcon className="h-3.5 w-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex flex-wrap items-end gap-2 border-t border-border px-3 py-2.5">
+          <label className={fieldClass}>
+            <span className={labelClass}>Database</span>
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              className={`${inputClass} w-48`}
+            >
+              <option value="">Select a database…</option>
+              {attachableDatabases.map((db) => (
+                <option key={db.id} value={db.id}>
+                  {db.name} ({db.type})
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button variant="primary" size="sm" disabled={busy || !selected} onClick={handleAttach}>
+            <PlusIcon className="h-3.5 w-3.5" />
+            Attach
+          </Button>
+        </div>
+      </div>
+    </Panel>
   );
 }
 

@@ -1,5 +1,6 @@
 package com.funchole.backend.dispatcher;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 
@@ -30,11 +31,13 @@ public record RuntimeExecutionRequest(
         UUID componentVersionId,
         String runtimeType,
         String input,
-        Map<String, String> environment
+        Map<String, String> environment,
+        List<DatabaseConnectionInfo> databases
 ) {
 
     public RuntimeExecutionRequest {
         environment = environment == null ? Map.of() : Map.copyOf(environment);
+        databases = databases == null ? List.of() : List.copyOf(databases);
     }
 
     public RuntimeExecutionRequest(
@@ -62,18 +65,28 @@ public record RuntimeExecutionRequest(
                 componentVersionId,
                 runtimeType,
                 input,
-                Map.of()
+                Map.of(),
+                List.of()
         );
     }
 
     public static RuntimeExecutionRequest of(InvocationStepExecution stepExecution, String input) {
-        return of(stepExecution, input, Map.of());
+        return of(stepExecution, input, Map.of(), List.of());
     }
 
     public static RuntimeExecutionRequest of(
             InvocationStepExecution stepExecution,
             String input,
             Map<String, String> environment
+    ) {
+        return of(stepExecution, input, environment, List.of());
+    }
+
+    public static RuntimeExecutionRequest of(
+            InvocationStepExecution stepExecution,
+            String input,
+            Map<String, String> environment,
+            List<DatabaseConnectionInfo> databases
     ) {
         return new RuntimeExecutionRequest(
                 stepExecution.id(),
@@ -87,7 +100,8 @@ public record RuntimeExecutionRequest(
                 stepExecution.componentVersionId(),
                 stepExecution.runtimeType(),
                 input,
-                environment
+                environment,
+                databases
         );
     }
 }

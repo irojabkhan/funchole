@@ -50,6 +50,7 @@ public final class InvocationDispatcher {
     private final ExecutionPlanner executionPlanner;
     private final RuntimeExecutionGateway executionGateway;
     private final FunctionVersionEnvironmentResolver environmentResolver;
+    private final FunctionVersionDatabaseResolver databaseResolver;
     private final InvocationStepExecutionLogRegistry stepExecutionLogRegistry;
     private final JetStreamSubscription subscription;
 
@@ -139,6 +140,29 @@ public final class InvocationDispatcher {
             FunctionVersionEnvironmentResolver environmentResolver,
             InvocationStepExecutionLogRegistry stepExecutionLogRegistry
     ) {
+        this(connection, invocationRegistry, stepExecutionRegistry, runtimeRegistry,
+                executionPlanner, executionGateway, environmentResolver, new NoopFunctionVersionDatabaseResolver(),
+                stepExecutionLogRegistry);
+    }
+
+    /**
+     * Full constructor, additionally wiring the shared-Database resolver:
+     * every FUNCTION step execution's warm connections (F-database-resource,
+     * see {@code Database}/{@code FunctionVersionDatabaseAttachment} in the
+     * controlplane module) are resolved here, alongside env vars/secrets, and
+     * handed to the Runtime Worker over the same IPC payload.
+     */
+    public InvocationDispatcher(
+            Connection connection,
+            InvocationRegistry invocationRegistry,
+            InvocationStepExecutionRegistry stepExecutionRegistry,
+            RuntimeRegistry runtimeRegistry,
+            ExecutionPlanner executionPlanner,
+            RuntimeExecutionGateway executionGateway,
+            FunctionVersionEnvironmentResolver environmentResolver,
+            FunctionVersionDatabaseResolver databaseResolver,
+            InvocationStepExecutionLogRegistry stepExecutionLogRegistry
+    ) {
         this.connection = connection;
         this.invocationRegistry = invocationRegistry;
         this.stepExecutionRegistry = stepExecutionRegistry;
@@ -148,6 +172,7 @@ public final class InvocationDispatcher {
         this.executionPlanner = executionPlanner;
         this.executionGateway = executionGateway;
         this.environmentResolver = environmentResolver;
+        this.databaseResolver = databaseResolver;
         this.stepExecutionLogRegistry = stepExecutionLogRegistry;
         ensureStream();
         this.subscription = subscribe();
@@ -261,7 +286,8 @@ public final class InvocationDispatcher {
         );
         try {
             Map<String, String> environment = environmentResolver.resolve(stepExecution.componentVersionId());
-            RuntimeExecutionRequest executionRequest = RuntimeExecutionRequest.of(stepExecution, stepInput, environment);
+            List<DatabaseConnectionInfo> databases = databaseResolver.resolve(stepExecution.componentVersionId());
+            RuntimeExecutionRequest executionRequest = RuntimeExecutionRequest.of(stepExecution, stepInput, environment, databases);
             UUID stepExecutionId = stepExecution.id();
             RuntimeExecutionHandle handle = executionGateway.handoff(runtimeTarget, executionRequest,
                     logEntry -> stepExecutionLogRegistry.append(stepExecutionId, logEntry.stream(), logEntry.message()));

@@ -1,5 +1,6 @@
 package com.funchole.backend.dispatcher;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.Map;
 
@@ -21,11 +22,13 @@ record IpcInvokePayload(
         UUID componentVersionId,
         String runtimeType,
         String input,
-        Map<String, String> environment
+        Map<String, String> environment,
+        List<DatabaseConnectionInfo> databases
 ) {
 
     public IpcInvokePayload {
         environment = environment == null ? Map.of() : Map.copyOf(environment);
+        databases = databases == null ? List.of() : List.copyOf(databases);
     }
 
     static IpcInvokePayload from(RuntimeExecutionRequest request) {
@@ -40,7 +43,8 @@ record IpcInvokePayload(
                 request.componentVersionId(),
                 request.runtimeType(),
                 request.input(),
-                request.environment()
+                request.environment(),
+                request.databases()
         );
     }
 }

@@ -31,7 +31,15 @@ public class OpenBaoFunctionSecretStore implements FunctionSecretStore {
 
     @Override
     public String save(UUID functionVersionId, String key, String value) {
-        String secretRef = secretRef(functionVersionId, key);
+        return writeSecret(secretRef(functionVersionId, key), value);
+    }
+
+    @Override
+    public String saveForDatabase(UUID databaseId, String key, String value) {
+        return writeSecret(databaseSecretRef(databaseId, key), value);
+    }
+
+    private String writeSecret(String secretRef, String value) {
         try {
             String body = objectMapper.writeValueAsString(Map.of(
                     "data", Map.of("value", value)
@@ -45,19 +53,23 @@ public class OpenBaoFunctionSecretStore implements FunctionSecretStore {
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() >= 300) {
-                throw new IllegalStateException("OpenBao function secret write failed with status " + response.statusCode());
+                throw new IllegalStateException("OpenBao secret write failed with status " + response.statusCode());
             }
             return secretRef;
         } catch (IOException | InterruptedException exception) {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            throw new IllegalStateException("Failed to save function secret to OpenBao", exception);
+            throw new IllegalStateException("Failed to save secret to OpenBao", exception);
         }
     }
 
     private static String secretRef(UUID functionVersionId, String key) {
         return "function-versions/" + functionVersionId + "/secrets/" + key;
+    }
+
+    private static String databaseSecretRef(UUID databaseId, String key) {
+        return "databases/" + databaseId + "/" + key;
     }
 
     private URI secretUri(String secretRef) {

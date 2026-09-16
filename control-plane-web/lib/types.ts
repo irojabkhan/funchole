@@ -293,6 +293,48 @@ export interface InvocationInspectionResponse {
   steps: InvocationStepInspectionResponse[];
 }
 
+export interface DatabaseResponse {
+  id: string;
+  name: string;
+  type: string;
+  host: string;
+  port: number;
+  databaseName: string;
+  username: string;
+  sslEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DatabaseCreateRequest {
+  name: string;
+  type: string;
+  host: string;
+  port: number;
+  databaseName: string;
+  username: string;
+  password: string;
+  sslEnabled?: boolean | null;
+}
+
+export interface DatabaseUpdateRequest {
+  name: string;
+  host: string;
+  port: number;
+  databaseName: string;
+  username: string;
+  password?: string | null;
+  sslEnabled?: boolean | null;
+}
+
+export interface FunctionVersionDatabaseAttachmentResponse {
+  id: string;
+  databaseId: string;
+  databaseName: string;
+  databaseType: string;
+  createdAt: string;
+}
+
 export interface PaginationResponse<T> {
   items: T[];
   page: number;
