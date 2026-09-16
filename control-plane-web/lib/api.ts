@@ -10,7 +10,13 @@ import type {
   DirectInvocationResponse,
   DomainCreateRequest,
   DomainResponse,
+  EnvironmentProfileConfigResponse,
+  EnvironmentProfileCreateRequest,
+  EnvironmentProfileResponse,
+  EnvironmentProfileUpdateRequest,
+  FlowDatabaseAttachmentResponse,
   FlowCreateRequest,
+  FlowEnvironmentAttachmentResponse,
   FlowResponse,
   FlowStepCreateRequest,
   FlowStepResponse,
@@ -383,6 +389,77 @@ export const api = {
 
   deleteDatabase(id: string): Promise<Record<string, string>> {
     return request(`/api/v1/databases/${id}`, { method: "DELETE" });
+  },
+
+  listEnvironments(page: number, size: number): Promise<PaginationResponse<EnvironmentProfileResponse>> {
+    return request(`/api/v1/environments?page=${page}&size=${size}`);
+  },
+
+  createEnvironment(payload: EnvironmentProfileCreateRequest): Promise<EnvironmentProfileResponse> {
+    return request("/api/v1/environments", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  updateEnvironment(id: string, payload: EnvironmentProfileUpdateRequest): Promise<EnvironmentProfileResponse> {
+    return request(`/api/v1/environments/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+  },
+
+  deleteEnvironment(id: string): Promise<Record<string, string>> {
+    return request(`/api/v1/environments/${id}`, { method: "DELETE" });
+  },
+
+  getEnvironmentConfig(id: string): Promise<EnvironmentProfileConfigResponse> {
+    return request(`/api/v1/environments/${id}/config`);
+  },
+
+  upsertEnvironmentEnvVar(id: string, key: string, value: string): Promise<EnvironmentProfileConfigResponse> {
+    return request(`/api/v1/environments/${id}/config/env/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
+  },
+
+  upsertEnvironmentSecret(id: string, key: string, value: string): Promise<EnvironmentProfileConfigResponse> {
+    return request(`/api/v1/environments/${id}/config/secrets/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ value }),
+    });
+  },
+
+  listFlowEnvironments(flowId: string): Promise<FlowEnvironmentAttachmentResponse[]> {
+    return request(`/api/v1/flows/${flowId}/environments`);
+  },
+
+  attachFlowEnvironment(
+    flowId: string,
+    environmentId: string,
+    priority?: number | null
+  ): Promise<FlowEnvironmentAttachmentResponse[]> {
+    return request(`/api/v1/flows/${flowId}/environments/${environmentId}`, {
+      method: "PUT",
+      body: JSON.stringify({ priority: priority ?? null }),
+    });
+  },
+
+  detachFlowEnvironment(flowId: string, environmentId: string): Promise<FlowEnvironmentAttachmentResponse[]> {
+    return request(`/api/v1/flows/${flowId}/environments/${environmentId}`, {
+      method: "DELETE",
+    });
+  },
+
+  listFlowDatabases(flowId: string): Promise<FlowDatabaseAttachmentResponse[]> {
+    return request(`/api/v1/flows/${flowId}/databases`);
+  },
+
+  attachFlowDatabase(flowId: string, databaseId: string): Promise<FlowDatabaseAttachmentResponse[]> {
+    return request(`/api/v1/flows/${flowId}/databases/${databaseId}`, {
+      method: "PUT",
+    });
+  },
+
+  detachFlowDatabase(flowId: string, databaseId: string): Promise<FlowDatabaseAttachmentResponse[]> {
+    return request(`/api/v1/flows/${flowId}/databases/${databaseId}`, {
+      method: "DELETE",
+    });
   },
 
   listFunctionVersionDatabases(

@@ -285,8 +285,8 @@ public final class InvocationDispatcher {
                 runtimeTarget.runtimeType()
         );
         try {
-            Map<String, String> environment = environmentResolver.resolve(stepExecution.componentVersionId());
-            List<DatabaseConnectionInfo> databases = databaseResolver.resolve(stepExecution.componentVersionId());
+            Map<String, String> environment = environmentResolver.resolve(stepExecution);
+            List<DatabaseConnectionInfo> databases = databaseResolver.resolve(stepExecution);
             RuntimeExecutionRequest executionRequest = RuntimeExecutionRequest.of(stepExecution, stepInput, environment, databases);
             UUID stepExecutionId = stepExecution.id();
             RuntimeExecutionHandle handle = executionGateway.handoff(runtimeTarget, executionRequest,

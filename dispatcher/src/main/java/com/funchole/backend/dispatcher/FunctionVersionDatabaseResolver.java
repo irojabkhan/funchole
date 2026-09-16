@@ -6,4 +6,8 @@ import java.util.UUID;
 public interface FunctionVersionDatabaseResolver {
 
     List<DatabaseConnectionInfo> resolve(UUID functionVersionId);
+
+    default List<DatabaseConnectionInfo> resolve(InvocationStepExecution stepExecution) {
+        return resolve(stepExecution.componentVersionId());
+    }
 }

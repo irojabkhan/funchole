@@ -35,6 +35,11 @@ public class OpenBaoFunctionSecretStore implements FunctionSecretStore {
     }
 
     @Override
+    public String saveForEnvironment(UUID environmentProfileId, String key, String value) {
+        return writeSecret(environmentSecretRef(environmentProfileId, key), value);
+    }
+
+    @Override
     public String saveForDatabase(UUID databaseId, String key, String value) {
         return writeSecret(databaseSecretRef(databaseId, key), value);
     }
@@ -66,6 +71,10 @@ public class OpenBaoFunctionSecretStore implements FunctionSecretStore {
 
     private static String secretRef(UUID functionVersionId, String key) {
         return "function-versions/" + functionVersionId + "/secrets/" + key;
+    }
+
+    private static String environmentSecretRef(UUID environmentProfileId, String key) {
+        return "environments/" + environmentProfileId + "/secrets/" + key;
     }
 
     private static String databaseSecretRef(UUID databaseId, String key) {

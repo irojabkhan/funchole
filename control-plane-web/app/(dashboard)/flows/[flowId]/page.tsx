@@ -2,14 +2,22 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button, buttonClasses } from "@/components/Button";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
-import { ArrowLeftIcon, ChevronRightIcon, PlusIcon, PencilIcon, TrashIcon, PlayIcon, ArchiveIcon } from "@/components/icons";
+import { ArrowLeftIcon, ChevronRightIcon, PlusIcon, PencilIcon, TrashIcon, PlayIcon, ArchiveIcon, KeyIcon, DatabaseIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
-import type { FlowResponse, FlowVersionResponse, GatewayResponse } from "@/lib/types";
+import type {
+  DatabaseResponse,
+  EnvironmentProfileResponse,
+  FlowDatabaseAttachmentResponse,
+  FlowEnvironmentAttachmentResponse,
+  FlowResponse,
+  FlowVersionResponse,
+  GatewayResponse,
+} from "@/lib/types";
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
@@ -30,8 +38,14 @@ export default function FlowDetailPage() {
   const [flow, setFlow] = useState<FlowResponse | null>(null);
   const [versions, setVersions] = useState<FlowVersionResponse[]>([]);
   const [gateways, setGateways] = useState<GatewayResponse[]>([]);
+  const [environments, setEnvironments] = useState<EnvironmentProfileResponse[]>([]);
+  const [databases, setDatabases] = useState<DatabaseResponse[]>([]);
+  const [flowEnvironments, setFlowEnvironments] = useState<FlowEnvironmentAttachmentResponse[]>([]);
+  const [flowDatabases, setFlowDatabases] = useState<FlowDatabaseAttachmentResponse[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [editForm, setEditForm] = useState<EditFormState | null>(null);
+  const [environmentToAttach, setEnvironmentToAttach] = useState("");
+  const [databaseToAttach, setDatabaseToAttach] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -55,6 +69,30 @@ export default function FlowDetailPage() {
         if (!cancelled) setGateways(gatewayData.items);
       } catch {
         if (!cancelled) setGateways([]);
+      }
+      try {
+        const environmentData = await api.listEnvironments(1, 100);
+        if (!cancelled) setEnvironments(environmentData.items);
+      } catch {
+        if (!cancelled) setEnvironments([]);
+      }
+      try {
+        const databaseData = await api.listDatabases(1, 100);
+        if (!cancelled) setDatabases(databaseData.items);
+      } catch {
+        if (!cancelled) setDatabases([]);
+      }
+      try {
+        const data = await api.listFlowEnvironments(flowId);
+        if (!cancelled) setFlowEnvironments(data);
+      } catch {
+        if (!cancelled) setFlowEnvironments([]);
+      }
+      try {
+        const data = await api.listFlowDatabases(flowId);
+        if (!cancelled) setFlowDatabases(data);
+      } catch {
+        if (!cancelled) setFlowDatabases([]);
       }
     })();
     return () => {
@@ -152,6 +190,50 @@ export default function FlowDetailPage() {
       refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to delete version");
+    }
+  }
+
+  async function handleAttachEnvironment() {
+    if (!environmentToAttach) return;
+    setError(null);
+    try {
+      const data = await api.attachFlowEnvironment(flowId, environmentToAttach, 100);
+      setFlowEnvironments(data);
+      setEnvironmentToAttach("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to attach environment");
+    }
+  }
+
+  async function handleDetachEnvironment(environmentId: string) {
+    setError(null);
+    try {
+      const data = await api.detachFlowEnvironment(flowId, environmentId);
+      setFlowEnvironments(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to detach environment");
+    }
+  }
+
+  async function handleAttachDatabase() {
+    if (!databaseToAttach) return;
+    setError(null);
+    try {
+      const data = await api.attachFlowDatabase(flowId, databaseToAttach);
+      setFlowDatabases(data);
+      setDatabaseToAttach("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to attach database");
+    }
+  }
+
+  async function handleDetachDatabase(databaseId: string) {
+    setError(null);
+    try {
+      const data = await api.detachFlowDatabase(flowId, databaseId);
+      setFlowDatabases(data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to detach database");
     }
   }
 
@@ -308,6 +390,49 @@ export default function FlowDetailPage() {
         )}
       </Panel>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <FlowAttachmentCard
+          icon={<KeyIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />}
+          title="Inherited environments"
+          description="Variables and secrets attached here are available to every function step in this Flow."
+          emptyText="No environments attached."
+          selectValue={environmentToAttach}
+          selectPlaceholder="Select environment"
+          options={environments.map((environment) => ({
+            id: environment.id,
+            label: `${environment.name} (${environment.environmentKey})`,
+          }))}
+          items={flowEnvironments.map((attachment) => ({
+            id: attachment.environmentProfileId,
+            title: attachment.environmentName,
+            subtitle: attachment.environmentKey,
+          }))}
+          onSelect={setEnvironmentToAttach}
+          onAttach={handleAttachEnvironment}
+          onDetach={handleDetachEnvironment}
+        />
+        <FlowAttachmentCard
+          icon={<DatabaseIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />}
+          title="Inherited databases"
+          description="Database connections attached here are available to every function step in this Flow."
+          emptyText="No databases attached."
+          selectValue={databaseToAttach}
+          selectPlaceholder="Select database"
+          options={databases.map((database) => ({
+            id: database.id,
+            label: `${database.name} (${database.type})`,
+          }))}
+          items={flowDatabases.map((attachment) => ({
+            id: attachment.databaseId,
+            title: attachment.databaseName,
+            subtitle: attachment.databaseType,
+          }))}
+          onSelect={setDatabaseToAttach}
+          onAttach={handleAttachDatabase}
+          onDetach={handleDetachDatabase}
+        />
+      </div>
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">Versions</h2>
         <Button variant="primary" size="sm" onClick={handleNewDraft} disabled={busy}>
@@ -380,5 +505,75 @@ export default function FlowDetailPage() {
         </table>
       </Panel>
     </div>
+  );
+}
+
+interface FlowAttachmentCardProps {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  emptyText: string;
+  selectValue: string;
+  selectPlaceholder: string;
+  options: { id: string; label: string }[];
+  items: { id: string; title: string; subtitle: string }[];
+  onSelect: (value: string) => void;
+  onAttach: () => void;
+  onDetach: (id: string) => void;
+}
+
+function FlowAttachmentCard({
+  icon,
+  title,
+  description,
+  emptyText,
+  selectValue,
+  selectPlaceholder,
+  options,
+  items,
+  onSelect,
+  onAttach,
+  onDetach,
+}: FlowAttachmentCardProps) {
+  return (
+    <Panel className="flex flex-col gap-4 p-4">
+      <div className="flex items-center gap-2">
+        {icon}
+        <p className="text-sm font-medium text-foreground">{title}</p>
+      </div>
+      <p className="text-xs text-muted">{description}</p>
+      <div className="flex gap-2">
+        <select value={selectValue} onChange={(event) => onSelect(event.target.value)} className={inputClass}>
+          <option value="">{selectPlaceholder}</option>
+          {options.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <Button variant="primary" size="sm" disabled={!selectValue} onClick={onAttach}>
+          Attach
+        </Button>
+      </div>
+      {items.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted">
+          {emptyText}
+        </p>
+      ) : (
+        <ul className="divide-y divide-border rounded-lg border border-border">
+          {items.map((item) => (
+            <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                <p className="font-mono text-xs text-muted">{item.subtitle}</p>
+              </div>
+              <Button variant="danger" size="icon" title="Detach" onClick={() => onDetach(item.id)}>
+                <TrashIcon className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }

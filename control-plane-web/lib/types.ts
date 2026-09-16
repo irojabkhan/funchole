@@ -327,6 +327,49 @@ export interface DatabaseUpdateRequest {
   sslEnabled?: boolean | null;
 }
 
+export interface EnvironmentProfileResponse {
+  id: string;
+  environmentKey: string;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnvironmentProfileCreateRequest {
+  environmentKey: string;
+  name: string;
+  description?: string | null;
+}
+
+export interface EnvironmentProfileUpdateRequest {
+  name: string;
+  description?: string | null;
+}
+
+export interface EnvironmentProfileConfigResponse {
+  environmentProfileId: string;
+  envVars: FunctionVersionEnvVarResponse[];
+  secrets: FunctionVersionSecretResponse[];
+}
+
+export interface FlowEnvironmentAttachmentResponse {
+  id: string;
+  environmentProfileId: string;
+  environmentKey: string;
+  environmentName: string;
+  priority: number;
+  createdAt: string;
+}
+
+export interface FlowDatabaseAttachmentResponse {
+  id: string;
+  databaseId: string;
+  databaseName: string;
+  databaseType: string;
+  createdAt: string;
+}
+
 export interface FunctionVersionDatabaseAttachmentResponse {
   id: string;
   databaseId: string;

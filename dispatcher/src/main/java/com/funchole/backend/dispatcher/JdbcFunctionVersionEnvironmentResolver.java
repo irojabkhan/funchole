@@ -31,6 +31,66 @@ public final class JdbcFunctionVersionEnvironmentResolver implements FunctionVer
         }
     }
 
+    @Override
+    public Map<String, String> resolve(InvocationStepExecution stepExecution) {
+        try (Connection connection = dataSource.getConnection()) {
+            Map<String, String> environment = new LinkedHashMap<>();
+            if (stepExecution.flowId() != null) {
+                loadFlowEnvVars(connection, stepExecution.flowId(), environment);
+                loadFlowSecrets(connection, stepExecution.flowId(), environment);
+            }
+            loadEnvVars(connection, stepExecution.componentVersionId(), environment);
+            loadSecrets(connection, stepExecution.componentVersionId(), environment);
+            return Map.copyOf(environment);
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to load step environment: " + stepExecution.id(), exception);
+        }
+    }
+
+    private void loadFlowEnvVars(Connection connection, UUID flowId, Map<String, String> environment) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT v.config_key, v.config_value
+                FROM flow_environment_attachments a
+                JOIN environment_profiles p ON p.id = a.environment_profile_id
+                JOIN environment_profile_env_vars v ON v.environment_profile_id = p.id
+                WHERE a.flow_id = ?
+                  AND p.deleted_at IS NULL
+                ORDER BY a.priority ASC, a.created_at ASC, v.config_key ASC
+                """)) {
+            statement.setObject(1, flowId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    environment.put(resultSet.getString("config_key"), resultSet.getString("config_value"));
+                }
+            }
+        }
+    }
+
+    private void loadFlowSecrets(Connection connection, UUID flowId, Map<String, String> environment) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT s.config_key, s.secret_ref
+                FROM flow_environment_attachments a
+                JOIN environment_profiles p ON p.id = a.environment_profile_id
+                JOIN environment_profile_secrets s ON s.environment_profile_id = p.id
+                WHERE a.flow_id = ?
+                  AND p.deleted_at IS NULL
+                ORDER BY a.priority ASC, a.created_at ASC, s.config_key ASC
+                """)) {
+            statement.setObject(1, flowId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    String key = resultSet.getString("config_key");
+                    String secretRef = resultSet.getString("secret_ref");
+                    String secretValue = secretReader.read(secretRef);
+                    if (secretValue == null) {
+                        throw new IllegalStateException("Environment secret value is missing: " + secretRef);
+                    }
+                    environment.put(key, secretValue);
+                }
+            }
+        }
+    }
+
     private void loadEnvVars(Connection connection, UUID functionVersionId, Map<String, String> environment) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT config_key, config_value
@@ -58,10 +118,6 @@ public final class JdbcFunctionVersionEnvironmentResolver implements FunctionVer
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     String key = resultSet.getString("config_key");
-                    if (environment.containsKey(key)) {
-                        throw new IllegalStateException(
-                                "Function version config key exists as both env var and secret: " + key);
-                    }
                     String secretRef = resultSet.getString("secret_ref");
                     String secretValue = secretReader.read(secretRef);
                     if (secretValue == null) {

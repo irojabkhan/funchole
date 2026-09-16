@@ -1,9 +1,9 @@
 package com.funchole.backend.dispatcher;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.sql.Statement;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -32,6 +32,10 @@ class JdbcFunctionVersionEnvironmentResolverTest {
         try (var connection = dataSource().getConnection(); Statement statement = connection.createStatement()) {
             statement.execute("drop table if exists function_version_env_vars");
             statement.execute("drop table if exists function_version_secrets");
+            statement.execute("drop table if exists flow_environment_attachments");
+            statement.execute("drop table if exists environment_profile_env_vars");
+            statement.execute("drop table if exists environment_profile_secrets");
+            statement.execute("drop table if exists environment_profiles");
             statement.execute("""
                     create table function_version_env_vars (
                         id UUID primary key,
@@ -46,6 +50,37 @@ class JdbcFunctionVersionEnvironmentResolverTest {
                         function_version_id UUID not null,
                         config_key VARCHAR(255) not null,
                         secret_ref VARCHAR(2048) not null
+                    )
+                    """);
+            statement.execute("""
+                    create table environment_profiles (
+                        id UUID primary key,
+                        deleted_at TIMESTAMP WITH TIME ZONE
+                    )
+                    """);
+            statement.execute("""
+                    create table environment_profile_env_vars (
+                        id UUID primary key,
+                        environment_profile_id UUID not null,
+                        config_key VARCHAR(255) not null,
+                        config_value TEXT not null
+                    )
+                    """);
+            statement.execute("""
+                    create table environment_profile_secrets (
+                        id UUID primary key,
+                        environment_profile_id UUID not null,
+                        config_key VARCHAR(255) not null,
+                        secret_ref VARCHAR(2048) not null
+                    )
+                    """);
+            statement.execute("""
+                    create table flow_environment_attachments (
+                        id UUID primary key,
+                        flow_id UUID not null,
+                        environment_profile_id UUID not null,
+                        priority INTEGER not null,
+                        created_at TIMESTAMP WITH TIME ZONE not null default CURRENT_TIMESTAMP
                     )
                     """);
         }
@@ -80,24 +115,69 @@ class JdbcFunctionVersionEnvironmentResolverTest {
     }
 
     @Test
-    void rejectsDuplicatePlainAndSecretConfigKey() throws Exception {
+    void resolvesFlowEnvironmentAndLetsFunctionVersionOverrideSharedValues() throws Exception {
+        UUID flowId = UUID.randomUUID();
         UUID functionVersionId = UUID.randomUUID();
-        secretReader.put("secret-ref", "secret-token");
+        UUID environmentProfileId = UUID.randomUUID();
+        secretReader.put("environment-secret-ref", "shared-secret");
+        secretReader.put("function-secret-ref", "function-secret");
 
         try (var connection = dataSource().getConnection(); Statement statement = connection.createStatement()) {
             statement.execute("""
+                    insert into environment_profiles (id)
+                    values ('%s')
+                    """.formatted(environmentProfileId));
+            statement.execute("""
+                    insert into flow_environment_attachments (id, flow_id, environment_profile_id, priority)
+                    values ('%s', '%s', '%s', 100)
+                    """.formatted(UUID.randomUUID(), flowId, environmentProfileId));
+            statement.execute("""
+                    insert into environment_profile_env_vars (id, environment_profile_id, config_key, config_value)
+                    values ('%s', '%s', 'NODE_ENV', 'production')
+                    """.formatted(UUID.randomUUID(), environmentProfileId));
+            statement.execute("""
+                    insert into environment_profile_secrets (id, environment_profile_id, config_key, secret_ref)
+                    values ('%s', '%s', 'SHARED_TOKEN', 'environment-secret-ref')
+                    """.formatted(UUID.randomUUID(), environmentProfileId));
+            statement.execute("""
                     insert into function_version_env_vars (id, function_version_id, config_key, config_value)
-                    values ('%s', '%s', 'API_TOKEN', 'plain-token')
+                    values ('%s', '%s', 'NODE_ENV', 'test')
                     """.formatted(UUID.randomUUID(), functionVersionId));
             statement.execute("""
                     insert into function_version_secrets (id, function_version_id, config_key, secret_ref)
-                    values ('%s', '%s', 'API_TOKEN', 'secret-ref')
+                    values ('%s', '%s', 'API_TOKEN', 'function-secret-ref')
                     """.formatted(UUID.randomUUID(), functionVersionId));
         }
 
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> resolver.resolve(functionVersionId));
+        InvocationStepExecution execution = new InvocationStepExecution(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                flowId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                1,
+                "FUNCTION",
+                UUID.randomUUID(),
+                functionVersionId,
+                "NODE",
+                null,
+                InvocationStepExecutionStatus.READY,
+                1,
+                null,
+                null,
+                OffsetDateTime.now(),
+                OffsetDateTime.now(),
+                null,
+                null
+        );
 
-        assertEquals("Function version config key exists as both env var and secret: API_TOKEN", exception.getMessage());
+        Map<String, String> environment = resolver.resolve(execution);
+
+        assertEquals(Map.of(
+                "NODE_ENV", "test",
+                "SHARED_TOKEN", "shared-secret",
+                "API_TOKEN", "function-secret"
+        ), environment);
     }
 
     private DataSource dataSource() {

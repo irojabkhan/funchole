@@ -215,6 +215,12 @@ class FunctionVersionConfigIntegrationTests {
         }
 
         @Override
+        public String saveForEnvironment(UUID environmentProfileId, String key, String value) {
+            values.put(cacheKey(environmentProfileId, key), value);
+            return "environments/" + environmentProfileId + "/secrets/" + key;
+        }
+
+        @Override
         public String saveForDatabase(UUID databaseId, String key, String value) {
             values.put(cacheKey(databaseId, key), value);
             return "databases/" + databaseId + "/" + key;

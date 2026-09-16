@@ -148,7 +148,7 @@ export default function DatabasesPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Databases</h1>
           <p className="mt-1 text-sm text-muted">
-            FuncHole manages the connection - attach a database to a function version and it's ready via{" "}
+            FuncHole manages the connection - attach a database to a function version and it&apos;s ready via{" "}
             <code className="rounded bg-surface-hover px-1 py-0.5 font-mono text-xs">context.db(name)</code>.
           </p>
         </div>
