@@ -204,6 +204,16 @@ export function DatabaseIcon({ className }: IconProps) {
   );
 }
 
+export function TerminalIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={base} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9.5 10.5 12 7 14.5" />
+      <path d="M12.5 14.5h4.5" />
+    </svg>
+  );
+}
+
 export function ZapIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={base} strokeLinecap="round" strokeLinejoin="round" className={className}>

@@ -25,6 +25,19 @@ spring:
     multipart:
       max-file-size: 25MB
       max-request-size: 25MB
+  ai:
+    mcp:
+      server:
+        protocol: STREAMABLE
+        name: funchole-mcp-server
+        version: ${APP_VERSION:0.1.0-SNAPSHOT}
+        instructions: >
+          FuncHole lets you create Functions, compose them into Flows, expose
+          Flows as HTTP routes through a Gateway, and attach shared
+          environment/secret/database resources - all through these tools
+          instead of the REST API directly.
+        streamable-http:
+          mcp-endpoint: /api/mcp
 
 springdoc:
   swagger-ui:

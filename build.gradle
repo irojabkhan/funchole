@@ -18,6 +18,7 @@ ext {
     natsVersion = '2.26.0'
     awsSdkVersion = '2.29.52'
     commonsCompressVersion = '1.27.1'
+    springAiVersion = '2.0.1'
 }
 
 allprojects {
@@ -59,6 +60,7 @@ subprojects {
             mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
             mavenBom "org.testcontainers:testcontainers-bom:${testcontainersVersion}"
             mavenBom "software.amazon.awssdk:bom:${awsSdkVersion}"
+            mavenBom "org.springframework.ai:spring-ai-bom:${springAiVersion}"
         }
     }
 

@@ -30,6 +30,14 @@ dependencies {
         exclude group: 'org.slf4j', module: 'slf4j-simple'
     }
 
+    // MCP server (Streamable HTTP transport) so agent/coding-assistant users
+    // get the same capability surface as the REST API - see EPIC-15 in the
+    // PRD. GA as of Spring AI 2.0.1, unlike the still-WIP/community
+    // "MCP Security" convenience module, which is why auth for this endpoint
+    // is a plain hand-rolled Spring Security filter (ApiKeyAuthenticationFilter)
+    // mirroring JwtAuthenticationFilter, not Spring AI's own security starter.
+    implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-log4j2'

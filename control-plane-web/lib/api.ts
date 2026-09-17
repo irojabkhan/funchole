@@ -1,6 +1,9 @@
 import { clearToken, getToken } from "@/lib/auth";
 import type {
   ApiErrorResponse,
+  ApiKeyCreateRequest,
+  ApiKeyCreateResponse,
+  ApiKeyResponse,
   ApiResponse,
   AuthTokenResponse,
   DatabaseCreateRequest,
@@ -487,5 +490,17 @@ export const api = {
     return request(`/api/v1/functions/${functionId}/versions/${versionId}/databases/${databaseId}`, {
       method: "DELETE",
     });
+  },
+
+  listApiKeys(): Promise<ApiKeyResponse[]> {
+    return request("/api/v1/api-keys");
+  },
+
+  createApiKey(payload: ApiKeyCreateRequest): Promise<ApiKeyCreateResponse> {
+    return request("/api/v1/api-keys", { method: "POST", body: JSON.stringify(payload) });
+  },
+
+  revokeApiKey(id: string): Promise<Record<string, string>> {
+    return request(`/api/v1/api-keys/${id}`, { method: "DELETE" });
   },
 };

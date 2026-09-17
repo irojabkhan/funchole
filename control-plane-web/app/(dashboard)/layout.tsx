@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api } from "@/lib/api";
 import { clearToken } from "@/lib/auth";
 import type { ProfileResponse } from "@/lib/types";
-import { GridIcon, FunctionIcon, WorkflowIcon, ServerIcon, GlobeIcon, DatabaseIcon, KeyIcon, LogOutIcon } from "@/components/icons";
+import { GridIcon, FunctionIcon, WorkflowIcon, ServerIcon, GlobeIcon, DatabaseIcon, KeyIcon, TerminalIcon, LogOutIcon } from "@/components/icons";
 
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: GridIcon },
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/databases", label: "Databases", icon: DatabaseIcon },
   { href: "/gateways", label: "Gateways", icon: ServerIcon },
   { href: "/domains", label: "Domains", icon: GlobeIcon },
+  { href: "/api-keys", label: "API Keys", icon: TerminalIcon },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

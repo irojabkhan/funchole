@@ -378,6 +378,27 @@ export interface FunctionVersionDatabaseAttachmentResponse {
   createdAt: string;
 }
 
+export interface ApiKeyResponse {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface ApiKeyCreateRequest {
+  name: string;
+}
+
+export interface ApiKeyCreateResponse {
+  id: string;
+  name: string;
+  keyPrefix: string;
+  rawKey: string;
+  createdAt: string;
+}
+
 export interface PaginationResponse<T> {
   items: T[];
   page: number;
