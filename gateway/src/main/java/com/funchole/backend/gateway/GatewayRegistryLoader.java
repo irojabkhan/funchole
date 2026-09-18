@@ -5,6 +5,7 @@ import com.funchole.backend.certificate.CertificateReference;
 import com.funchole.backend.certificate.store.CertificateLoader;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.GatewayRoutingSnapshot;
+import com.funchole.backend.gateway.flow.PrefixRoute;
 import com.funchole.backend.gateway.flow.RouteKey;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -14,9 +15,15 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import javax.net.ssl.SSLException;
 import javax.sql.DataSource;
@@ -54,6 +61,7 @@ public final class GatewayRegistryLoader {
 
     private Map<UUID, GatewayRoutingSnapshot> loadRouting() throws SQLException {
         Map<UUID, Map<RouteKey, FlowResolution>> routesByGatewayId = new LinkedHashMap<>();
+        Map<UUID, List<PrefixRoute>> prefixRoutesByGatewayId = new LinkedHashMap<>();
         try (
                 Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
@@ -63,7 +71,17 @@ public final class GatewayRegistryLoader {
                             f.path,
                             f.id as flow_id,
                             f.flow_key,
-                            f.active_flow_version_id
+                            f.active_flow_version_id,
+                            (
+                                select fv.id
+                                from flow_steps fs
+                                join function_versions fv on fv.id = fs.component_version_id
+                                where fs.flow_version_id = f.active_flow_version_id
+                                  and fs.component_type = 'FUNCTION'
+                                  and fv.runtime = 'STATIC'
+                                order by fs.position asc
+                                limit 1
+                            ) as static_function_version_id
                         from flows f
                         join gateways g on g.id = f.gateway_id
                         where f.deleted_at is null
@@ -75,23 +93,49 @@ public final class GatewayRegistryLoader {
             try (ResultSet resultSet = statement.executeQuery()) {
                 while (resultSet.next()) {
                     UUID gatewayId = UUID.fromString(resultSet.getString("gateway_id"));
-                    RouteKey routeKey = new RouteKey(
-                            resultSet.getString("http_method"),
-                            resultSet.getString("path")
-                    );
+                    String httpMethod = resultSet.getString("http_method");
+                    String path = resultSet.getString("path");
+                    String staticFunctionVersionIdText = resultSet.getString("static_function_version_id");
+                    UUID staticFunctionVersionId = staticFunctionVersionIdText == null
+                            ? null : UUID.fromString(staticFunctionVersionIdText);
+
+                    // A path ending in "/*" owns an entire subtree (a whole
+                    // SPA/SSR frontend app, or anything that wants its own
+                    // internal sub-routing) rather than one exact URL, so it
+                    // goes into the prefix-matched fallback list instead of
+                    // the exact-match map.
+                    Optional<String> wildcardPrefix = PrefixRoute.wildcardPrefix(path);
                     FlowResolution resolution = new FlowResolution(
                             UUID.fromString(resultSet.getString("flow_id")),
                             resultSet.getString("flow_key"),
-                            UUID.fromString(resultSet.getString("active_flow_version_id"))
+                            UUID.fromString(resultSet.getString("active_flow_version_id")),
+                            wildcardPrefix.orElse(null),
+                            staticFunctionVersionId
                     );
-                    routesByGatewayId.computeIfAbsent(gatewayId, key -> new HashMap<>()).put(routeKey, resolution);
+
+                    if (wildcardPrefix.isPresent()) {
+                        prefixRoutesByGatewayId.computeIfAbsent(gatewayId, key -> new ArrayList<>())
+                                .add(new PrefixRoute(httpMethod, wildcardPrefix.get(), resolution));
+                    } else {
+                        RouteKey routeKey = new RouteKey(httpMethod, path);
+                        routesByGatewayId.computeIfAbsent(gatewayId, key -> new HashMap<>()).put(routeKey, resolution);
+                    }
                 }
             }
         }
 
         Map<UUID, GatewayRoutingSnapshot> routingByGatewayId = new LinkedHashMap<>();
-        routesByGatewayId.forEach((gatewayId, routes) ->
-                routingByGatewayId.put(gatewayId, new GatewayRoutingSnapshot(Map.copyOf(routes))));
+        Set<UUID> gatewayIds = new LinkedHashSet<>();
+        gatewayIds.addAll(routesByGatewayId.keySet());
+        gatewayIds.addAll(prefixRoutesByGatewayId.keySet());
+        for (UUID gatewayId : gatewayIds) {
+            Map<RouteKey, FlowResolution> exactRoutes = routesByGatewayId.getOrDefault(gatewayId, Map.of());
+            List<PrefixRoute> prefixRoutes = new ArrayList<>(prefixRoutesByGatewayId.getOrDefault(gatewayId, List.of()));
+            // Longest prefix first, so "/app/admin/*" is tried before the
+            // broader "/app/*" when both could match the same request.
+            prefixRoutes.sort(Comparator.comparingInt((PrefixRoute route) -> route.prefix().length()).reversed());
+            routingByGatewayId.put(gatewayId, new GatewayRoutingSnapshot(Map.copyOf(exactRoutes), prefixRoutes));
+        }
         return Map.copyOf(routingByGatewayId);
     }
 

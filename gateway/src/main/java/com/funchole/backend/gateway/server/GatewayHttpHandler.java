@@ -7,6 +7,9 @@ import com.funchole.backend.gateway.GatewayRequestContext;
 import com.funchole.backend.gateway.GatewayRuntimeEntry;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.FlowResolver;
+import com.funchole.backend.gateway.staticsite.StaticContentTypes;
+import com.funchole.backend.gateway.staticsite.StaticFileResolver;
+import com.funchole.backend.gateway.staticsite.StaticSiteCache;
 import com.funchole.backend.invocation.CreateInvocationRequest;
 import com.funchole.backend.invocation.Invocation;
 import com.funchole.backend.invocation.InvocationRegistry;
@@ -22,7 +25,10 @@ import io.netty.handler.codec.http.FullHttpResponse;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -41,6 +47,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
     private final InvocationRegistry invocationRegistry;
     private final PendingInvocationResponseRegistry pendingResponseRegistry;
     private final ExecutorService invocationExecutor;
+    private final StaticSiteCache staticSiteCache;
 
     public GatewayHttpHandler(
             ObjectMapper objectMapper,
@@ -48,7 +55,8 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
             FlowResolver flowResolver,
             InvocationRegistry invocationRegistry,
             PendingInvocationResponseRegistry pendingResponseRegistry,
-            ExecutorService invocationExecutor
+            ExecutorService invocationExecutor,
+            StaticSiteCache staticSiteCache
     ) {
         this.objectMapper = objectMapper;
         this.gatewayRegistry = gatewayRegistry;
@@ -56,6 +64,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         this.invocationRegistry = invocationRegistry;
         this.pendingResponseRegistry = pendingResponseRegistry;
         this.invocationExecutor = invocationExecutor;
+        this.staticSiteCache = staticSiteCache;
     }
 
     @Override
@@ -123,6 +132,10 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         }
 
         FlowResolution flow = resolution.get();
+        if (flow.staticFunctionVersionId() != null) {
+            serveStaticSite(context, requestContext, flow);
+            return;
+        }
         // FullHttpRequest buffers must only be touched on the event loop:
         // extract the request payload here, then offload the blocking
         // Invocation Registry work to the dedicated executor.
@@ -133,6 +146,67 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
                 requestContext.path()
         );
         createInvocationOnExecutor(context, requestContext, flow, inputPayload);
+    }
+
+    /**
+     * Serves a {@code STATIC}-runtime Flow directly from its cached
+     * artifact - no Invocation, no Dispatcher, no NATS round trip. Runs on
+     * the dedicated executor since resolving the cache (possibly a real S3
+     * fetch on a miss) and reading the file are both blocking I/O; only the
+     * final HTTP write touches the Netty event loop.
+     */
+    private void serveStaticSite(ChannelHandlerContext context, GatewayRequestContext requestContext, FlowResolution flow) {
+        invocationExecutor.execute(() -> {
+            Optional<Path> siteRoot = staticSiteCache.resolve(flow.staticFunctionVersionId());
+            if (siteRoot.isEmpty()) {
+                logger.warn(
+                        "Static site artifact unavailable: flowKey={}, functionVersionId={}",
+                        flow.flowKey(), flow.staticFunctionVersionId());
+                runOnEventLoop(context, () -> writeJson(context, HttpResponseStatus.NOT_FOUND, Map.of(
+                        "success", false,
+                        "message", "Static site artifact not found",
+                        "flowKey", flow.flowKey()
+                )));
+                return;
+            }
+
+            String relativePath = relativeStaticPath(flow, requestContext.path());
+            Optional<Path> file = StaticFileResolver.resolve(siteRoot.get(), relativePath);
+            if (file.isEmpty()) {
+                runOnEventLoop(context, () -> writeText(context, HttpResponseStatus.NOT_FOUND, "Not found"));
+                return;
+            }
+
+            byte[] content;
+            try {
+                content = Files.readAllBytes(file.get());
+            } catch (IOException exception) {
+                runOnEventLoop(context, () -> writeText(
+                        context, HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                        "Failed to read static file: " + exception.getMessage()));
+                return;
+            }
+
+            String contentType = StaticContentTypes.forPath(file.get());
+            runOnEventLoop(context, () -> writeBytes(context, HttpResponseStatus.OK, contentType, content));
+        });
+    }
+
+    /**
+     * The request path relative to the site's own root: for a wildcard Flow
+     * (e.g. registered at {@code "/app/*"}), strips the matched prefix so
+     * {@code /app/dashboard} resolves to {@code dashboard} inside the site's
+     * own artifact rather than {@code app/dashboard}. An exact-path static
+     * Flow has no prefix to strip - it always serves the site's root
+     * document, since there is no sub-path to route within a single URL.
+     */
+    private String relativeStaticPath(FlowResolution flow, String requestPath) {
+        if (flow.routePrefix() == null) {
+            return "";
+        }
+        return requestPath.startsWith(flow.routePrefix())
+                ? requestPath.substring(flow.routePrefix().length())
+                : "";
     }
 
     /**
@@ -419,6 +493,17 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         );
         response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
         response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, responseBody.length);
+        context.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void writeBytes(ChannelHandlerContext context, HttpResponseStatus status, String contentType, byte[] body) {
+        FullHttpResponse response = new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                status,
+                Unpooled.wrappedBuffer(body)
+        );
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+        response.headers().setInt(HttpHeaderNames.CONTENT_LENGTH, body.length);
         context.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 

@@ -6,9 +6,11 @@ import com.funchole.backend.controlplane.dto.FlowVersionCreateRequest;
 import com.funchole.backend.controlplane.entity.Flow;
 import com.funchole.backend.controlplane.entity.FlowStep;
 import com.funchole.backend.controlplane.entity.FlowVersion;
+import com.funchole.backend.controlplane.entity.FunctionVersion;
 import com.funchole.backend.controlplane.repository.FlowRepository;
 import com.funchole.backend.controlplane.repository.FlowStepRepository;
 import com.funchole.backend.controlplane.repository.FlowVersionRepository;
+import com.funchole.backend.controlplane.repository.FunctionVersionRepository;
 import com.funchole.backend.core.base.exception.ResourceNotFoundException;
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class FlowVersionService {
     private static final String DEFAULT_RUNTIME = "NODE";
+    private static final String STATIC_RUNTIME = "STATIC";
 
     private static final Set<FlowStepComponentType> TERMINAL_COMPONENT_TYPES =
             Set.of(FlowStepComponentType.RESPONSE, FlowStepComponentType.SUB_FLOW);
@@ -33,19 +36,22 @@ public class FlowVersionService {
     private final FlowRepository flowRepository;
     private final FlowService flowService;
     private final FlowStepReferenceValidator flowStepReferenceValidator;
+    private final FunctionVersionRepository functionVersionRepository;
 
     public FlowVersionService(
             FlowVersionRepository flowVersionRepository,
             FlowStepRepository flowStepRepository,
             FlowRepository flowRepository,
             FlowService flowService,
-            FlowStepReferenceValidator flowStepReferenceValidator
+            FlowStepReferenceValidator flowStepReferenceValidator,
+            FunctionVersionRepository functionVersionRepository
     ) {
         this.flowVersionRepository = flowVersionRepository;
         this.flowStepRepository = flowStepRepository;
         this.flowRepository = flowRepository;
         this.flowService = flowService;
         this.flowStepReferenceValidator = flowStepReferenceValidator;
+        this.functionVersionRepository = functionVersionRepository;
     }
 
     public Page<FlowVersion> listVersions(UUID appUserId, UUID flowId, int page, int size) {
@@ -114,6 +120,12 @@ public class FlowVersionService {
      * last step is sound by induction: it can only reference an ADOPTED
      * FlowVersion, which was itself already required to end this same way
      * when it was adopted.
+     *
+     * <p>A FUNCTION last step is also allowed when it references a
+     * STATIC-runtime FunctionVersion: the Gateway serves that route by
+     * reading the artifact's files directly and never creates an
+     * Invocation or dispatches any step for it, so the "ends in RESPONSE"
+     * invariant doesn't apply.
      */
     private void validateStepsForAdoption(UUID appUserId, List<FlowStep> steps) {
         int previousPosition = 0;
@@ -130,11 +142,21 @@ public class FlowVersionService {
         }
 
         FlowStep lastStep = steps.get(steps.size() - 1);
-        if (!TERMINAL_COMPONENT_TYPES.contains(lastStep.getComponentType())) {
+        if (!TERMINAL_COMPONENT_TYPES.contains(lastStep.getComponentType()) && !isStaticSiteStep(lastStep)) {
             throw new IllegalArgumentException(
                     "The last step of a Flow must be RESPONSE or SUB_FLOW so the invocation can terminate, found "
                             + lastStep.getComponentType() + " at position " + lastStep.getPosition());
         }
+    }
+
+    private boolean isStaticSiteStep(FlowStep step) {
+        if (step.getComponentType() != FlowStepComponentType.FUNCTION) {
+            return false;
+        }
+        return functionVersionRepository.findByIdAndFunction_Id(step.getComponentVersionId(), step.getComponentId())
+                .map(FunctionVersion::getRuntime)
+                .filter(STATIC_RUNTIME::equals)
+                .isPresent();
     }
 
     @Transactional

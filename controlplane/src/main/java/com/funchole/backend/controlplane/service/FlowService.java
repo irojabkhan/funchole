@@ -47,6 +47,7 @@ public class FlowService {
         if (flowRepository.existsByFlowKey(request.flowKey())) {
             throw new IllegalArgumentException("Flow key already in use: " + request.flowKey());
         }
+        validatePath(request.path());
 
         Gateway gateway = getOwnedGateway(appUser.getId(), request.gatewayId());
 
@@ -66,6 +67,7 @@ public class FlowService {
 
     @Transactional
     public Flow updateFlow(UUID appUserId, UUID flowId, FlowUpdateRequest request) {
+        validatePath(request.path());
         Flow flow = getFlowById(appUserId, flowId);
         Gateway gateway = getOwnedGateway(appUserId, request.gatewayId());
 
@@ -95,5 +97,28 @@ public class FlowService {
 
     private int resolvePriority(Integer priority) {
         return priority != null ? priority : DEFAULT_PRIORITY;
+    }
+
+    /**
+     * A path may be a literal exact route, or a wildcard route ending in
+     * exactly "/*" - matching an entire subtree (a whole SPA/SSR frontend
+     * app, or anything doing its own internal sub-routing) rather than one
+     * URL. Only a single trailing "/*" is supported (see
+     * {@code gateway.flow.PrefixRoute}) - a "*" anywhere else is rejected so
+     * a malformed pattern fails at creation time, not silently at request
+     * time in the Gateway.
+     */
+    private void validatePath(String path) {
+        if (path == null) {
+            return;
+        }
+        int starIndex = path.indexOf('*');
+        if (starIndex == -1) {
+            return;
+        }
+        if (!path.endsWith("/*") || path.indexOf('*') != path.length() - 1) {
+            throw new IllegalArgumentException(
+                    "Path may only use '*' as a single trailing wildcard segment, e.g. '/app/*': " + path);
+        }
     }
 }

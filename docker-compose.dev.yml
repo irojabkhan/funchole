@@ -55,10 +55,18 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      rustfs-init:
+        condition: service_completed_successfully
     environment:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       NATS_URL: nats://nats:4222
+      S3_ARTIFACT_ENDPOINT: http://rustfs:9000
+      S3_ARTIFACT_BUCKET: funchole-artifacts
+      S3_ARTIFACT_ACCESS_KEY: funchole
+      S3_ARTIFACT_SECRET_KEY: funchole-secret
+      S3_ARTIFACT_REGION: us-east-1
+      S3_ARTIFACT_PATH_STYLE_ACCESS: "true"
     ports:
       - "443:443"
     volumes:

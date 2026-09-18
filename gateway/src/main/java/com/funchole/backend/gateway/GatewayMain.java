@@ -1,18 +1,24 @@
 package com.funchole.backend.gateway;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.funchole.backend.artifact.RemoteArtifactStore;
+import com.funchole.backend.artifact.S3ArtifactStore;
+import com.funchole.backend.artifact.S3ArtifactStoreConfig;
 import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.SnapshotFlowResolver;
 import com.funchole.backend.gateway.server.GatewayHttpHandler;
 import com.funchole.backend.gateway.server.GatewayInvocationCompletionListener;
 import com.funchole.backend.gateway.server.GatewayServer;
 import com.funchole.backend.gateway.server.PendingInvocationResponseRegistry;
+import com.funchole.backend.gateway.staticsite.StaticSiteCache;
 import com.funchole.backend.invocation.JdbcInvocationRegistry;
 import com.funchole.backend.invocation.NatsJetStreamInvocationEventPublisher;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
+import java.net.URI;
+import java.nio.file.Path;
 import java.time.Duration;
 import javax.sql.DataSource;
 import java.util.concurrent.ExecutorService;
@@ -54,13 +60,18 @@ public final class GatewayMain {
             thread.setDaemon(true);
             return thread;
         });
+        StaticSiteCache staticSiteCache = new StaticSiteCache(
+                Path.of(readString("GATEWAY_STATIC_SITE_CACHE_DIR", "/tmp/funchole/gateway-static-site-cache")),
+                createRemoteArtifactStore()
+        );
         GatewayHttpHandler gatewayHttpHandler = new GatewayHttpHandler(
                 objectMapper,
                 gatewayRegistry,
                 flowResolver,
                 invocationRegistry,
                 pendingResponseRegistry,
-                invocationExecutor
+                invocationExecutor,
+                staticSiteCache
         );
         GatewayServer gatewayServer = new GatewayServer(port, gatewayRegistry, gatewayHttpHandler);
         ScheduledExecutorService registryRefreshExecutor = createRegistryRefreshExecutor();
@@ -162,6 +173,23 @@ public final class GatewayMain {
         }
     }
 
+    /**
+     * Same {@code S3_ARTIFACT_*} env vars {@code RuntimeWorkerMain} reads -
+     * the Gateway fetches STATIC-runtime artifacts from the exact same
+     * remote store Functions are published to, just for reading files
+     * directly rather than executing anything.
+     */
+    private static RemoteArtifactStore createRemoteArtifactStore() {
+        return new S3ArtifactStore("STATIC", new S3ArtifactStoreConfig(
+                URI.create(readRequiredString("S3_ARTIFACT_ENDPOINT")),
+                readRequiredString("S3_ARTIFACT_BUCKET"),
+                readRequiredString("S3_ARTIFACT_ACCESS_KEY"),
+                readRequiredString("S3_ARTIFACT_SECRET_KEY"),
+                readString("S3_ARTIFACT_REGION", "us-east-1"),
+                readBoolean("S3_ARTIFACT_PATH_STYLE_ACCESS", true)
+        ));
+    }
+
     private static DataSource createDataSource() {
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(readString("DB_URL", "jdbc:postgresql://localhost:5432/funchole"));
@@ -185,5 +213,18 @@ public final class GatewayMain {
             return fallback;
         }
         return Integer.parseInt(value);
+    }
+
+    private static String readRequiredString(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " is required");
+        }
+        return value;
+    }
+
+    private static boolean readBoolean(String name, boolean fallback) {
+        String value = System.getenv(name);
+        return value == null || value.isBlank() ? fallback : Boolean.parseBoolean(value);
     }
 }

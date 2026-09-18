@@ -1,6 +1,6 @@
 package com.funchole.backend.controlplane.controller;
 
-import com.funchole.backend.controlplane.functionbuild.runtime.node.NodeBuildException;
+import com.funchole.backend.controlplane.functionbuild.BuildFailureException;
 import com.funchole.backend.core.base.exception.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.OffsetDateTime;
@@ -13,18 +13,20 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Lives in {@code controlplane}, not {@code core}, because
- * {@link NodeBuildException} does - {@code core} cannot depend on
+ * {@link BuildFailureException} does - {@code core} cannot depend on
  * {@code controlplane}. Spring resolves {@code @ExceptionHandler} methods
  * across every {@code @RestControllerAdvice} bean by exception-type
  * specificity, so this composes correctly alongside the generic
  * {@code core.GlobalExceptionHandler} without either needing to know about
- * the other.
+ * the other. One handler for every {@code RuntimeBuilder}'s build failures -
+ * Node's, a static site's, and any future runtime's - since they all share
+ * the same diagnostic shape.
  */
 @RestControllerAdvice
 public class BuildExceptionHandler {
 
-    @ExceptionHandler(NodeBuildException.class)
-    public ResponseEntity<ApiErrorResponse> handleNodeBuildFailure(NodeBuildException exception, HttpServletRequest request) {
+    @ExceptionHandler(BuildFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleBuildFailure(BuildFailureException exception, HttpServletRequest request) {
         List<String> details = new ArrayList<>();
         details.add("stage: " + exception.stage());
         details.add("command: " + String.join(" ", exception.command()));

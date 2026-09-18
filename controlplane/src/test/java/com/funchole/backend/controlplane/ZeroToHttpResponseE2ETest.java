@@ -247,7 +247,8 @@ class ZeroToHttpResponseE2ETest {
                 new SnapshotFlowResolver(gatewayRegistry),
                 gatewayInvocationRegistry,
                 pendingResponseRegistry,
-                Executors.newFixedThreadPool(2)
+                Executors.newFixedThreadPool(2),
+                null
         );
         gatewayServer = new GatewayServer(0, gatewayRegistry, gatewayHttpHandler);
         gatewayServer.start();
