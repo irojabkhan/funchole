@@ -1,6 +1,7 @@
 package com.funchole.backend.controlplane.mcp;
 
 import com.funchole.backend.controlplane.constant.FlowStepComponentType;
+import com.funchole.backend.controlplane.dto.FlowFullSourceResponse;
 import com.funchole.backend.controlplane.dto.FlowStepCreateRequest;
 import com.funchole.backend.controlplane.dto.FlowStepResponse;
 import com.funchole.backend.controlplane.dto.FlowStepUpdateRequest;
@@ -10,6 +11,7 @@ import com.funchole.backend.controlplane.entity.FlowStep;
 import com.funchole.backend.controlplane.entity.FlowVersion;
 import com.funchole.backend.controlplane.mapper.FlowStepMapper;
 import com.funchole.backend.controlplane.mapper.FlowVersionMapper;
+import com.funchole.backend.controlplane.service.FlowFullSourceService;
 import com.funchole.backend.controlplane.service.FlowStepService;
 import com.funchole.backend.controlplane.service.FlowVersionService;
 import java.util.List;
@@ -30,17 +32,20 @@ public class FlowVersionMcpTools {
 
     private final FlowVersionService flowVersionService;
     private final FlowStepService flowStepService;
+    private final FlowFullSourceService flowFullSourceService;
     private final FlowVersionMapper flowVersionMapper;
     private final FlowStepMapper flowStepMapper;
 
     public FlowVersionMcpTools(
             FlowVersionService flowVersionService,
             FlowStepService flowStepService,
+            FlowFullSourceService flowFullSourceService,
             FlowVersionMapper flowVersionMapper,
             FlowStepMapper flowStepMapper
     ) {
         this.flowVersionService = flowVersionService;
         this.flowStepService = flowStepService;
+        this.flowFullSourceService = flowFullSourceService;
         this.flowVersionMapper = flowVersionMapper;
         this.flowStepMapper = flowStepMapper;
     }
@@ -65,6 +70,21 @@ public class FlowVersionMcpTools {
         UUID flowUuid = UUID.fromString(flowId);
         FlowVersion flowVersion = flowVersionService.getVersionById(CurrentMcpUser.id(), flowUuid, UUID.fromString(versionId));
         return toResponseWithSteps(flowUuid, flowVersion);
+    }
+
+    @McpTool(
+            name = "get_flow_full_source",
+            description = "Get a FlowVersion's entire dependency tree in one call: its ordered steps, each "
+                    + "FUNCTION/RESPONSE/MIDDLEWARE step's full Function source, and each SUB_FLOW step expanded "
+                    + "the same way recursively. A step whose reference is gone, whose source content is missing "
+                    + "from storage, or that would revisit a FlowVersion already on the current path (a cycle) is "
+                    + "reported via that step's unavailableReason instead of failing the whole call."
+    )
+    public FlowFullSourceResponse getFlowFullSource(
+            @McpToolParam(description = "Flow id (UUID)") String flowId,
+            @McpToolParam(description = "FlowVersion id (UUID)") String versionId
+    ) {
+        return flowFullSourceService.getFullSource(CurrentMcpUser.id(), UUID.fromString(flowId), UUID.fromString(versionId));
     }
 
     @McpTool(
@@ -123,7 +143,15 @@ public class FlowVersionMcpTools {
             description = "Add a step to a DRAFT FlowVersion. componentType is one of FUNCTION, RESPONSE, "
                     + "MIDDLEWARE, SUB_FLOW; componentId/componentVersionId identify the Function/FlowVersion the "
                     + "step runs (both are that resource's own id for a FUNCTION step's componentId+its "
-                    + "FunctionVersion id, or the sub-flow's Flow id + its FlowVersion id for SUB_FLOW)."
+                    + "FunctionVersion id, or the sub-flow's Flow id + its FlowVersion id for SUB_FLOW). "
+                    + "IMPORTANT for a RESPONSE step (the one that ends the Flow and produces the HTTP response for "
+                    + "a NODE-runtime Flow): its Function's handler must return exactly {\"status\": <int>, \"body\": "
+                    + "<any JSON value>} - the Gateway reads only those two fields, always JSON-encodes body, and "
+                    + "always sends Content-Type: application/json. Any other fields (e.g. statusCode, headers) are "
+                    + "silently ignored. If you need to serve raw HTML/CSS/JS with the correct Content-Type (a "
+                    + "frontend/UI page), do not return HTML as a string from a NODE function - deploy it as a "
+                    + "STATIC-runtime Function instead (see create_function's runtime parameter) and route a Flow "
+                    + "to it; the Gateway then serves the files directly with no RESPONSE step needed."
     )
     public FlowStepResponse createFlowStep(
             @McpToolParam(description = "Flow id (UUID)") String flowId,

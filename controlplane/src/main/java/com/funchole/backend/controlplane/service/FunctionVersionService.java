@@ -50,7 +50,8 @@ public class FunctionVersionService {
     public FunctionVersion createDraftVersion(UUID appUserId, UUID functionId, FunctionVersionCreateRequest request) {
         Function function = functionService.getFunctionById(appUserId, functionId);
         int nextVersion = functionVersionRepository.findMaxVersion(functionId) + 1;
-        String runtime = request.runtime() != null ? request.runtime() : function.getRuntime();
+        String runtime = functionService.requireSupportedRuntime(
+                request.runtime() != null ? request.runtime() : function.getRuntime());
 
         FunctionVersion functionVersion = FunctionVersion.create(function, nextVersion, runtime, request.metadata());
         return functionVersionRepository.save(functionVersion);

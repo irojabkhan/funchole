@@ -93,18 +93,26 @@ public class FunctionVersionMcpTools {
     )
     public FunctionVersionResponse createFunctionVersion(
             @McpToolParam(description = "Function id (UUID)") String functionId,
-            @McpToolParam(description = "Runtime version pin, e.g. a Node version - optional", required = false) String runtimeVersion,
+            @McpToolParam(description = "Runtime: NODE (runs your handler code) or STATIC (serves a pre-built "
+                    + "static site's files directly, no code execution) - optional, defaults to the parent "
+                    + "Function's own runtime", required = false) String runtime,
             @McpToolParam(description = "Free-form metadata string - optional", required = false) String metadata
     ) {
         FunctionVersion version = functionVersionService.createDraftVersion(
-                CurrentMcpUser.id(), UUID.fromString(functionId), new FunctionVersionCreateRequest(runtimeVersion, metadata));
+                CurrentMcpUser.id(), UUID.fromString(functionId), new FunctionVersionCreateRequest(runtime, metadata));
         return functionVersionMapper.toResponse(version);
     }
 
     @McpTool(
             name = "submit_function_version_source",
             description = "Submit (or replace, while still DRAFT) a FunctionVersion's source files. Each file is "
-                    + "a relative path (e.g. 'index.mjs') and its full text content - no archive/multipart needed."
+                    + "a relative path (e.g. 'index.mjs') and its full text content - no archive/multipart needed. "
+                    + "IMPORTANT for a NODE-runtime function used as a Flow's RESPONSE step: the handler must "
+                    + "return exactly {\"status\": <int>, \"body\": <any JSON value>} - the Gateway reads only "
+                    + "those two fields, always JSON-encodes body, and always sends Content-Type: application/json "
+                    + "(any statusCode/headers fields are ignored). Returning an HTML string in body will be "
+                    + "JSON-encoded, not rendered - for a frontend/UI page, deploy a STATIC-runtime Function "
+                    + "instead (see create_function's runtime parameter), not a NODE function returning HTML."
     )
     public FunctionVersionSourceResponse submitFunctionVersionSource(
             @McpToolParam(description = "Function id (UUID)") String functionId,

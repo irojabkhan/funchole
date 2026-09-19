@@ -16,7 +16,9 @@ public record FunctionUpdateRequest(
         @Size(max = 1000, message = "Description must be at most 1000 characters")
         String description,
 
-        @Schema(defaultValue = "NODE", example = "NODE")
+        @Schema(defaultValue = "NODE", example = "NODE", description = "NODE (runs your handler code, for a "
+                + "backend/API function) or STATIC (serves a pre-built static site's files directly, for a "
+                + "frontend/UI)")
         @Nullable
         @Size(max = 100, message = "Runtime must be at most 100 characters")
         String runtime

@@ -61,7 +61,9 @@ public class FunctionMcpTools {
             @McpToolParam(description = "Unique key: letters, numbers, '_', '.' and '-' only, e.g. fn_hello_world") String functionKey,
             @McpToolParam(description = "Display name") String name,
             @McpToolParam(description = "Description", required = false) String description,
-            @McpToolParam(description = "Runtime - currently only NODE is supported, defaults to NODE", required = false) String runtime
+            @McpToolParam(description = "Runtime: NODE (runs your handler code - use for a backend/API function) "
+                    + "or STATIC (serves a pre-built static site's files directly, no code execution - use for a "
+                    + "frontend/UI). Defaults to NODE.", required = false) String runtime
     ) throws NotFoundException {
         AppUser appUser = profileService.loadUserById(CurrentMcpUser.id());
         Function created = functionService.createFunction(appUser, new FunctionCreateRequest(functionKey, name, description, runtime));
@@ -73,7 +75,9 @@ public class FunctionMcpTools {
             @McpToolParam(description = "Function id (UUID)") String functionId,
             @McpToolParam(description = "Display name") String name,
             @McpToolParam(description = "Description", required = false) String description,
-            @McpToolParam(description = "Runtime - currently only NODE is supported", required = false) String runtime
+            @McpToolParam(description = "Runtime: NODE (runs your handler code - use for a backend/API function) "
+                    + "or STATIC (serves a pre-built static site's files directly, no code execution - use for a "
+                    + "frontend/UI)", required = false) String runtime
     ) {
         Function updated = functionService.updateFunction(
                 CurrentMcpUser.id(), UUID.fromString(functionId), new FunctionUpdateRequest(name, description, runtime));

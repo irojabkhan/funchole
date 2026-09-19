@@ -6,6 +6,7 @@ import com.funchole.backend.controlplane.entity.AppUser;
 import com.funchole.backend.controlplane.entity.Function;
 import com.funchole.backend.controlplane.repository.FunctionRepository;
 import com.funchole.backend.core.base.exception.ResourceNotFoundException;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -17,6 +18,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class FunctionService {
     private static final String DEFAULT_RUNTIME = "NODE";
+
+    /**
+     * The two runtime types a RuntimeBuilder actually exists for (see
+     * NodeRuntimeBuilder/StaticRuntimeBuilder) - kept as its own small,
+     * independent list here rather than a shared constant, matching how
+     * FlowVersionService also keeps its own local STATIC_RUNTIME check:
+     * NODE runs your handler code (a backend/API function); STATIC serves
+     * a pre-built static site (index.html and its assets) directly from the
+     * Gateway, for a frontend/UI.
+     */
+    private static final Set<String> SUPPORTED_RUNTIMES = Set.of("NODE", "STATIC");
 
     private final FunctionRepository functionRepository;
 
@@ -76,6 +88,18 @@ public class FunctionService {
     }
 
     private String resolveRuntime(String runtime) {
-        return runtime != null ? runtime : DEFAULT_RUNTIME;
+        return requireSupportedRuntime(runtime != null ? runtime : DEFAULT_RUNTIME);
+    }
+
+    /**
+     * Also used by {@link FunctionVersionService} when a FunctionVersion
+     * pins its own runtime independently of its parent Function's.
+     */
+    String requireSupportedRuntime(String runtime) {
+        if (!SUPPORTED_RUNTIMES.contains(runtime.toUpperCase())) {
+            throw new IllegalArgumentException(
+                    "Unsupported runtime: " + runtime + " - must be one of " + SUPPORTED_RUNTIMES);
+        }
+        return runtime;
     }
 }
