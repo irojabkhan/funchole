@@ -6,5 +6,5 @@ import java.util.Optional;
 
 public interface FlowResolver {
 
-    Optional<FlowResolution> resolve(GatewayRuntimeEntry gateway, GatewayRequestContext requestContext);
+    Optional<RouteMatch> resolve(GatewayRuntimeEntry gateway, GatewayRequestContext requestContext);
 }

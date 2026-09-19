@@ -7,7 +7,12 @@ public record RouteKey(String method, String path) {
         path = normalizePath(path);
     }
 
-    private static String normalizePath(String rawPath) {
+    /**
+     * Package-visible so {@link ParamRoute} can normalize a stored path
+     * template and an incoming request path with exactly the same rules
+     * (trailing-slash/query-string handling) used for exact-match routing.
+     */
+    static String normalizePath(String rawPath) {
         if (rawPath == null) {
             return "/";
         }

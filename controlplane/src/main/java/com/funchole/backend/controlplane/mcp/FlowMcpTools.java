@@ -64,7 +64,12 @@ public class FlowMcpTools {
             @McpToolParam(description = "Description", required = false) String description,
             @McpToolParam(description = "Gateway id (UUID) this route belongs to - see list_gateways") String gatewayId,
             @McpToolParam(description = "HTTP method, e.g. GET, POST") String httpMethod,
-            @McpToolParam(description = "Route path, must start with '/', e.g. /orders") String path,
+            @McpToolParam(description = "Route path, must start with '/'. Three shapes: an exact path (e.g. "
+                    + "'/orders'); a path with one or more ':name' parameter segments matching any single segment "
+                    + "there and capturing it (e.g. '/api/todos/:id' matches '/api/todos/42' - the invoked "
+                    + "Function's handler receives it as event.pathParameters.id); or a single trailing '/*' "
+                    + "wildcard owning an entire subtree (e.g. '/app/*', for a whole static site or its own "
+                    + "internal sub-routing). ':name' and '*' cannot be combined in the same path.") String path,
             @McpToolParam(description = "Route priority when paths could overlap, defaults to 100", required = false) Integer priority
     ) throws NotFoundException {
         AppUser appUser = profileService.loadUserById(CurrentMcpUser.id());
@@ -80,7 +85,9 @@ public class FlowMcpTools {
             @McpToolParam(description = "Description", required = false) String description,
             @McpToolParam(description = "Gateway id (UUID)") String gatewayId,
             @McpToolParam(description = "HTTP method, e.g. GET, POST") String httpMethod,
-            @McpToolParam(description = "Route path, must start with '/'") String path,
+            @McpToolParam(description = "Route path, must start with '/'. Same three shapes as create_flow: an "
+                    + "exact path, a ':name'-parameter path (captured into event.pathParameters), or a single "
+                    + "trailing '/*' wildcard.") String path,
             @McpToolParam(description = "Route priority", required = false) Integer priority
     ) {
         Flow updated = flowService.updateFlow(CurrentMcpUser.id(), UUID.fromString(flowId), new FlowUpdateRequest(

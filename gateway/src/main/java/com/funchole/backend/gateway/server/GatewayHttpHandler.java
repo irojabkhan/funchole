@@ -7,6 +7,7 @@ import com.funchole.backend.gateway.GatewayRequestContext;
 import com.funchole.backend.gateway.GatewayRuntimeEntry;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.FlowResolver;
+import com.funchole.backend.gateway.flow.RouteMatch;
 import com.funchole.backend.gateway.staticsite.StaticContentTypes;
 import com.funchole.backend.gateway.staticsite.StaticFileResolver;
 import com.funchole.backend.gateway.staticsite.StaticSiteCache;
@@ -113,8 +114,8 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
             return;
         }
 
-        Optional<FlowResolution> resolution = flowResolver.resolve(gateway, requestContext);
-        if (resolution.isEmpty()) {
+        Optional<RouteMatch> match = flowResolver.resolve(gateway, requestContext);
+        if (match.isEmpty()) {
             logger.info(
                     "Gateway request rejected: reason=route-not-found, host={}, method={}, path={}",
                     requestContext.hostname(),
@@ -131,7 +132,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
             return;
         }
 
-        FlowResolution flow = resolution.get();
+        FlowResolution flow = match.get().resolution();
         if (flow.staticFunctionVersionId() != null) {
             serveStaticSite(context, requestContext, flow);
             return;
@@ -139,7 +140,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         // FullHttpRequest buffers must only be touched on the event loop:
         // extract the request payload here, then offload the blocking
         // Invocation Registry work to the dedicated executor.
-        String inputPayload = buildInvocationInput(request, requestContext);
+        String inputPayload = buildInvocationInput(request, requestContext, match.get().pathParameters());
         logger.info(
                 "Gateway method resolved: flowKey={}, delegating invocation creation to executor, path={}",
                 flow.flowKey(),
@@ -467,14 +468,17 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         return colonIndex >= 0 ? normalized.substring(0, colonIndex) : normalized;
     }
 
-    private String buildInvocationInput(FullHttpRequest request, GatewayRequestContext requestContext) throws Exception {
+    private String buildInvocationInput(
+            FullHttpRequest request, GatewayRequestContext requestContext, Map<String, String> pathParameters
+    ) throws Exception {
         String body = request.content().toString(StandardCharsets.UTF_8);
         return objectMapper.writeValueAsString(Map.of(
                 "method", requestContext.method(),
                 "hostname", requestContext.hostname(),
                 "path", requestContext.path(),
                 "rawUri", requestContext.rawUri(),
-                "body", body
+                "body", body,
+                "pathParameters", pathParameters
         ));
     }
 

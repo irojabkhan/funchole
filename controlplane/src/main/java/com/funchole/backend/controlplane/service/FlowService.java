@@ -8,6 +8,8 @@ import com.funchole.backend.controlplane.entity.Gateway;
 import com.funchole.backend.controlplane.repository.FlowRepository;
 import com.funchole.backend.controlplane.repository.GatewayRepository;
 import com.funchole.backend.core.base.exception.ResourceNotFoundException;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -100,25 +102,54 @@ public class FlowService {
     }
 
     /**
-     * A path may be a literal exact route, or a wildcard route ending in
+     * A path may be a literal exact route, a wildcard route ending in
      * exactly "/*" - matching an entire subtree (a whole SPA/SSR frontend
      * app, or anything doing its own internal sub-routing) rather than one
-     * URL. Only a single trailing "/*" is supported (see
-     * {@code gateway.flow.PrefixRoute}) - a "*" anywhere else is rejected so
-     * a malformed pattern fails at creation time, not silently at request
-     * time in the Gateway.
+     * URL - or a path-parameter route with one or more ":name" segments
+     * (e.g. "/api/todos/:id"), matching any single segment in that position
+     * and capturing its value (see {@code gateway.flow.ParamRoute}). A "*"
+     * anywhere other than a single trailing "/*", a ":name" segment with an
+     * invalid or duplicate name, or combining "*" and ":name" in the same
+     * path, is rejected here so a malformed pattern fails at creation time,
+     * not silently (as an always-404 route) at request time in the Gateway.
      */
     private void validatePath(String path) {
         if (path == null) {
             return;
         }
-        int starIndex = path.indexOf('*');
-        if (starIndex == -1) {
-            return;
+        boolean hasWildcard = path.indexOf('*') != -1;
+        boolean hasParam = path.contains(":");
+        if (hasWildcard) {
+            if (!path.endsWith("/*") || path.indexOf('*') != path.length() - 1) {
+                throw new IllegalArgumentException(
+                        "Path may only use '*' as a single trailing wildcard segment, e.g. '/app/*': " + path);
+            }
+            if (hasParam) {
+                throw new IllegalArgumentException(
+                        "Path may not combine a wildcard '*' with ':name' parameter segments: " + path);
+            }
         }
-        if (!path.endsWith("/*") || path.indexOf('*') != path.length() - 1) {
-            throw new IllegalArgumentException(
-                    "Path may only use '*' as a single trailing wildcard segment, e.g. '/app/*': " + path);
+        if (hasParam) {
+            validateParamSegments(path);
+        }
+    }
+
+    private void validateParamSegments(String path) {
+        Set<String> paramNames = new HashSet<>();
+        for (String segment : path.split("/")) {
+            if (!segment.startsWith(":")) {
+                continue;
+            }
+            String paramName = segment.substring(1);
+            if (!paramName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+                throw new IllegalArgumentException(
+                        "Path parameter name must start with a letter or '_' and contain only letters, digits "
+                                + "or '_': '" + segment + "' in " + path);
+            }
+            if (!paramNames.add(paramName)) {
+                throw new IllegalArgumentException(
+                        "Path parameter name '" + paramName + "' is used more than once: " + path);
+            }
         }
     }
 }

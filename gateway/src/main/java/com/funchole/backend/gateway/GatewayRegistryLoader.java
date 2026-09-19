@@ -5,6 +5,7 @@ import com.funchole.backend.certificate.CertificateReference;
 import com.funchole.backend.certificate.store.CertificateLoader;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.GatewayRoutingSnapshot;
+import com.funchole.backend.gateway.flow.ParamRoute;
 import com.funchole.backend.gateway.flow.PrefixRoute;
 import com.funchole.backend.gateway.flow.RouteKey;
 import io.netty.handler.ssl.SslContext;
@@ -61,6 +62,7 @@ public final class GatewayRegistryLoader {
 
     private Map<UUID, GatewayRoutingSnapshot> loadRouting() throws SQLException {
         Map<UUID, Map<RouteKey, FlowResolution>> routesByGatewayId = new LinkedHashMap<>();
+        Map<UUID, List<ParamRoute>> paramRoutesByGatewayId = new LinkedHashMap<>();
         Map<UUID, List<PrefixRoute>> prefixRoutesByGatewayId = new LinkedHashMap<>();
         try (
                 Connection connection = dataSource.getConnection();
@@ -103,8 +105,14 @@ public final class GatewayRegistryLoader {
                     // SPA/SSR frontend app, or anything that wants its own
                     // internal sub-routing) rather than one exact URL, so it
                     // goes into the prefix-matched fallback list instead of
-                    // the exact-match map.
+                    // the exact-match map. A path with one or more ":name"
+                    // segments (e.g. "/api/todos/:id") is a fixed-length
+                    // shape with named holes instead - see ParamRoute.
+                    // FlowService.validatePath already rejects a path that
+                    // tries to combine the two.
                     Optional<String> wildcardPrefix = PrefixRoute.wildcardPrefix(path);
+                    Optional<List<String>> paramSegments = wildcardPrefix.isEmpty()
+                            ? ParamRoute.templateSegments(path) : Optional.empty();
                     FlowResolution resolution = new FlowResolution(
                             UUID.fromString(resultSet.getString("flow_id")),
                             resultSet.getString("flow_key"),
@@ -116,6 +124,9 @@ public final class GatewayRegistryLoader {
                     if (wildcardPrefix.isPresent()) {
                         prefixRoutesByGatewayId.computeIfAbsent(gatewayId, key -> new ArrayList<>())
                                 .add(new PrefixRoute(httpMethod, wildcardPrefix.get(), resolution));
+                    } else if (paramSegments.isPresent()) {
+                        paramRoutesByGatewayId.computeIfAbsent(gatewayId, key -> new ArrayList<>())
+                                .add(new ParamRoute(httpMethod, paramSegments.get(), resolution));
                     } else {
                         RouteKey routeKey = new RouteKey(httpMethod, path);
                         routesByGatewayId.computeIfAbsent(gatewayId, key -> new HashMap<>()).put(routeKey, resolution);
@@ -127,14 +138,16 @@ public final class GatewayRegistryLoader {
         Map<UUID, GatewayRoutingSnapshot> routingByGatewayId = new LinkedHashMap<>();
         Set<UUID> gatewayIds = new LinkedHashSet<>();
         gatewayIds.addAll(routesByGatewayId.keySet());
+        gatewayIds.addAll(paramRoutesByGatewayId.keySet());
         gatewayIds.addAll(prefixRoutesByGatewayId.keySet());
         for (UUID gatewayId : gatewayIds) {
             Map<RouteKey, FlowResolution> exactRoutes = routesByGatewayId.getOrDefault(gatewayId, Map.of());
+            List<ParamRoute> paramRoutes = paramRoutesByGatewayId.getOrDefault(gatewayId, List.of());
             List<PrefixRoute> prefixRoutes = new ArrayList<>(prefixRoutesByGatewayId.getOrDefault(gatewayId, List.of()));
             // Longest prefix first, so "/app/admin/*" is tried before the
             // broader "/app/*" when both could match the same request.
             prefixRoutes.sort(Comparator.comparingInt((PrefixRoute route) -> route.prefix().length()).reversed());
-            routingByGatewayId.put(gatewayId, new GatewayRoutingSnapshot(Map.copyOf(exactRoutes), prefixRoutes));
+            routingByGatewayId.put(gatewayId, new GatewayRoutingSnapshot(Map.copyOf(exactRoutes), paramRoutes, prefixRoutes));
         }
         return Map.copyOf(routingByGatewayId);
     }

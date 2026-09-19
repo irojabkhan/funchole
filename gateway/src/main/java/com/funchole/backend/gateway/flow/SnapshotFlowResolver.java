@@ -14,7 +14,7 @@ public final class SnapshotFlowResolver implements FlowResolver {
     }
 
     @Override
-    public Optional<FlowResolution> resolve(GatewayRuntimeEntry gateway, GatewayRequestContext requestContext) {
+    public Optional<RouteMatch> resolve(GatewayRuntimeEntry gateway, GatewayRequestContext requestContext) {
         return gatewayRegistry
                 .routingFor(gateway.gatewayId())
                 .resolve(requestContext.method(), requestContext.path());

@@ -26,6 +26,10 @@ class SnapshotFlowResolverTest {
     private static final UUID APP_VERSION_ID = UUID.fromString("66666666-6666-6666-6666-666666666664");
     private static final UUID APP_ADMIN_FLOW_ID = UUID.fromString("55555555-5555-5555-5555-555555555555");
     private static final UUID APP_ADMIN_VERSION_ID = UUID.fromString("66666666-6666-6666-6666-666666666665");
+    private static final UUID TODO_GET_FLOW_ID = UUID.fromString("55555555-5555-5555-5555-555555555556");
+    private static final UUID TODO_GET_VERSION_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
+    private static final UUID GENERIC_RESOURCE_FLOW_ID = UUID.fromString("55555555-5555-5555-5555-555555555557");
+    private static final UUID GENERIC_RESOURCE_VERSION_ID = UUID.fromString("66666666-6666-6666-6666-666666666667");
 
     private final GatewayRuntimeEntry gateway = new GatewayRuntimeEntry(
             GATEWAY_ID,
@@ -49,6 +53,15 @@ class SnapshotFlowResolverTest {
                             new RouteKey("POST", "/checkout"),
                             new FlowResolution(CHECKOUT_FLOW_ID, "flw_checkout", CHECKOUT_VERSION_ID)
                     ),
+                    List.of(
+                            // "/api/:resource/:id" (1 literal segment) is less specific
+                            // than "/api/todos/:id" (2 literal segments) - both match
+                            // "/api/todos/5" by segment count, the more literal one wins.
+                            new ParamRoute("GET", List.of("api", "todos", ":id"),
+                                    new FlowResolution(TODO_GET_FLOW_ID, "flw_todo_get", TODO_GET_VERSION_ID)),
+                            new ParamRoute("GET", List.of("api", ":resource", ":id"),
+                                    new FlowResolution(GENERIC_RESOURCE_FLOW_ID, "flw_generic_resource", GENERIC_RESOURCE_VERSION_ID))
+                    ),
                     // Longest prefix first, matching the ordering GatewayRegistryLoader
                     // itself produces - "/app/admin/*" must be tried before "/app/*".
                     List.of(
@@ -62,32 +75,32 @@ class SnapshotFlowResolverTest {
 
     @Test
     void resolvesGetOrdersToOrdersListFlow() {
-        Optional<FlowResolution> resolution = resolve("GET", "/orders");
+        Optional<RouteMatch> match = resolve("GET", "/orders");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_orders_list", resolution.get().flowKey());
-        assertEquals(ORDERS_LIST_FLOW_ID, resolution.get().flowId());
-        assertEquals(ORDERS_LIST_VERSION_ID, resolution.get().flowVersionId());
+        assertTrue(match.isPresent());
+        assertEquals("flw_orders_list", match.get().resolution().flowKey());
+        assertEquals(ORDERS_LIST_FLOW_ID, match.get().resolution().flowId());
+        assertEquals(ORDERS_LIST_VERSION_ID, match.get().resolution().flowVersionId());
     }
 
     @Test
     void resolvesPostOrdersToOrdersCreateFlow() {
-        Optional<FlowResolution> resolution = resolve("POST", "/orders");
+        Optional<RouteMatch> match = resolve("POST", "/orders");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_orders_create", resolution.get().flowKey());
-        assertEquals(ORDERS_CREATE_FLOW_ID, resolution.get().flowId());
-        assertEquals(ORDERS_CREATE_VERSION_ID, resolution.get().flowVersionId());
+        assertTrue(match.isPresent());
+        assertEquals("flw_orders_create", match.get().resolution().flowKey());
+        assertEquals(ORDERS_CREATE_FLOW_ID, match.get().resolution().flowId());
+        assertEquals(ORDERS_CREATE_VERSION_ID, match.get().resolution().flowVersionId());
     }
 
     @Test
     void resolvesPostCheckoutToCheckoutFlow() {
-        Optional<FlowResolution> resolution = resolve("POST", "/checkout");
+        Optional<RouteMatch> match = resolve("POST", "/checkout");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_checkout", resolution.get().flowKey());
-        assertEquals(CHECKOUT_FLOW_ID, resolution.get().flowId());
-        assertEquals(CHECKOUT_VERSION_ID, resolution.get().flowVersionId());
+        assertTrue(match.isPresent());
+        assertEquals("flw_checkout", match.get().resolution().flowKey());
+        assertEquals(CHECKOUT_FLOW_ID, match.get().resolution().flowId());
+        assertEquals(CHECKOUT_VERSION_ID, match.get().resolution().flowVersionId());
     }
 
     @Test
@@ -102,43 +115,43 @@ class SnapshotFlowResolverTest {
 
     @Test
     void normalizesTrailingSlash() {
-        Optional<FlowResolution> resolution = resolve("GET", "/orders/");
+        Optional<RouteMatch> match = resolve("GET", "/orders/");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_orders_list", resolution.get().flowKey());
+        assertTrue(match.isPresent());
+        assertEquals("flw_orders_list", match.get().resolution().flowKey());
     }
 
     @Test
     void ignoresQueryString() {
-        Optional<FlowResolution> resolution = resolve("GET", "/orders?page=2");
+        Optional<RouteMatch> match = resolve("GET", "/orders?page=2");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_orders_list", resolution.get().flowKey());
+        assertTrue(match.isPresent());
+        assertEquals("flw_orders_list", match.get().resolution().flowKey());
     }
 
     @Test
     void resolvesUnmatchedPathToWildcardFlow() {
-        Optional<FlowResolution> resolution = resolve("GET", "/app/dashboard/settings");
+        Optional<RouteMatch> match = resolve("GET", "/app/dashboard/settings");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_app", resolution.get().flowKey());
-        assertEquals(APP_FLOW_ID, resolution.get().flowId());
+        assertTrue(match.isPresent());
+        assertEquals("flw_app", match.get().resolution().flowKey());
+        assertEquals(APP_FLOW_ID, match.get().resolution().flowId());
     }
 
     @Test
     void prefersExactRouteOverWildcardFlow() {
-        Optional<FlowResolution> resolution = resolve("GET", "/orders");
+        Optional<RouteMatch> match = resolve("GET", "/orders");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_orders_list", resolution.get().flowKey());
+        assertTrue(match.isPresent());
+        assertEquals("flw_orders_list", match.get().resolution().flowKey());
     }
 
     @Test
     void prefersMoreSpecificWildcardOverBroaderOne() {
-        Optional<FlowResolution> resolution = resolve("GET", "/app/admin/users");
+        Optional<RouteMatch> match = resolve("GET", "/app/admin/users");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_app_admin", resolution.get().flowKey());
+        assertTrue(match.isPresent());
+        assertEquals("flw_app_admin", match.get().resolution().flowKey());
     }
 
     @Test
@@ -148,10 +161,10 @@ class SnapshotFlowResolverTest {
 
     @Test
     void wildcardMatchesItsOwnRootWithATrailingSlash() {
-        Optional<FlowResolution> resolution = resolve("GET", "/app/");
+        Optional<RouteMatch> match = resolve("GET", "/app/");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_app", resolution.get().flowKey());
+        assertTrue(match.isPresent());
+        assertEquals("flw_app", match.get().resolution().flowKey());
     }
 
     @Test
@@ -160,10 +173,61 @@ class SnapshotFlowResolverTest {
         // both "/app/" and "/app" arrive at PrefixRoute.matches() as "/app" -
         // this is the exact case that regressed serving a static site's own
         // root URL (see StaticFileResolver/GatewayHttpHandler).
-        Optional<FlowResolution> resolution = resolve("GET", "/app");
+        Optional<RouteMatch> match = resolve("GET", "/app");
 
-        assertTrue(resolution.isPresent());
-        assertEquals("flw_app", resolution.get().flowKey());
+        assertTrue(match.isPresent());
+        assertEquals("flw_app", match.get().resolution().flowKey());
+    }
+
+    @Test
+    void resolvesParamRouteAndCapturesTheValue() {
+        Optional<RouteMatch> match = resolve("GET", "/api/todos/42");
+
+        assertTrue(match.isPresent());
+        assertEquals("flw_todo_get", match.get().resolution().flowKey());
+        assertEquals(Map.of("id", "42"), match.get().pathParameters());
+    }
+
+    @Test
+    void paramRouteRejectsWrongMethod() {
+        assertTrue(resolve("DELETE", "/api/todos/42").isEmpty());
+    }
+
+    @Test
+    void paramRouteRejectsWrongSegmentCount() {
+        assertTrue(resolve("GET", "/api/todos/42/extra").isEmpty());
+        assertTrue(resolve("GET", "/api/todos").isEmpty());
+    }
+
+    @Test
+    void prefersExactRouteOverParamRoute() {
+        // "/orders" is registered as an exact route; a param route could
+        // never structurally collide with it here (different segment
+        // shapes), but this pins the documented precedence regardless.
+        Optional<RouteMatch> match = resolve("GET", "/orders");
+
+        assertTrue(match.isPresent());
+        assertTrue(match.get().pathParameters().isEmpty());
+    }
+
+    @Test
+    void prefersMoreLiteralParamRouteOverLessSpecificOne() {
+        // Both "/api/todos/:id" and "/api/:resource/:id" match "/api/todos/5"
+        // by segment count - the one with more literal segments wins.
+        Optional<RouteMatch> match = resolve("GET", "/api/todos/5");
+
+        assertTrue(match.isPresent());
+        assertEquals("flw_todo_get", match.get().resolution().flowKey());
+        assertEquals(Map.of("id", "5"), match.get().pathParameters());
+    }
+
+    @Test
+    void fallsBackToLessSpecificParamRouteForADifferentResource() {
+        Optional<RouteMatch> match = resolve("GET", "/api/users/7");
+
+        assertTrue(match.isPresent());
+        assertEquals("flw_generic_resource", match.get().resolution().flowKey());
+        assertEquals(Map.of("resource", "users", "id", "7"), match.get().pathParameters());
     }
 
     @Test
@@ -174,7 +238,7 @@ class SnapshotFlowResolverTest {
         assertTrue(resolver.resolve(otherGateway, new GatewayRequestContext("GET", "other.funchole.test", "/orders", "/orders")).isEmpty());
     }
 
-    private Optional<FlowResolution> resolve(String method, String path) {
+    private Optional<RouteMatch> resolve(String method, String path) {
         return resolver.resolve(gateway, new GatewayRequestContext(method, gateway.hostname(), path, path));
     }
 }

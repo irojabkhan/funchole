@@ -12,6 +12,7 @@ import com.funchole.backend.gateway.GatewayRequestContext;
 import com.funchole.backend.gateway.GatewayRuntimeEntry;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.FlowResolver;
+import com.funchole.backend.gateway.flow.RouteMatch;
 import com.funchole.backend.invocation.CreateInvocationRequest;
 import com.funchole.backend.invocationcontract.DirectInvocationRequest;
 import com.funchole.backend.invocation.Invocation;
@@ -345,9 +346,9 @@ class GatewayHttpHandlerInvocationTest {
         }
 
         @Override
-        public Optional<FlowResolution> resolve(GatewayRuntimeEntry gateway, GatewayRequestContext requestContext) {
+        public Optional<RouteMatch> resolve(GatewayRuntimeEntry gateway, GatewayRequestContext requestContext) {
             calls++;
-            return Optional.of(resolution);
+            return Optional.of(new RouteMatch(resolution, Map.of()));
         }
     }
 
