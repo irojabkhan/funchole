@@ -3,7 +3,7 @@
 **Document status:** Living PRD  
 **Baseline date:** 2026-09-13  
 **Audit source:** `CURRENT_PROJECT_STATE(1).md`  
-**Backlog coverage:** F001–F350, plus F351 (added 2026-09-16 for a gap discovered live - see GAP-18) (all master-backlog candidates are represented)  
+**Backlog coverage:** F001–F350, plus F351–F356 added during live product-gap work (all master-backlog candidates are represented)
 **Primary product goal:** a human **and** a coding agent can take FuncHole from an empty system to a real running HTTP-backed Function/Flow lifecycle without seed scripts, manual SQL, manual S3/file placement, or internal Java calls.
 
 ---
@@ -19,7 +19,7 @@ The most important current-state finding is that FuncHole has two strong but dis
 
 The flagship demo currently bridges that gap with seeded SQL and prebuilt artifacts instead of the real product lifecycle.
 
-This PRD converts the audit and the F001–F350 (+F351) master backlog into one traceable plan with:
+This PRD converts the audit and the F001–F350 (+F351–F356) master backlog into one traceable plan with:
 - epics;
 - user stories;
 - tasks;
@@ -30,7 +30,7 @@ This PRD converts the audit and the F001–F350 (+F351) master backlog into one 
 - acceptance criteria;
 - progress scoring;
 - explicit dependencies;
-- a complete F001–F350 (+F351, +F352) tracking matrix.
+- a complete F001–F350 (+F351–F356) tracking matrix.
 
 ---
 
@@ -115,23 +115,25 @@ This document uses a feature-level implementation score:
 
 ### 3.1 Current baseline
 
-**Last recalculated:** 2026-09-16, after GAP-17/GAP-18/GAP-19 were found live by the user and then fixed (not just found) in the same session, plus the new managed Database resource feature (F352).
+**Last recalculated:** 2026-09-20, after auditing the last few days of shipped work: shared Flow configuration, managed database inheritance, MCP API parity, STATIC-runtime frontend deployment, path-parameter gateway routes, runtime validation/RESPONSE contract documentation, and `get_flow_full_source`.
 
-- **Master backlog completion:** **45.2%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0% → 45.2%, EPIC-02 through GAP-17/18/19 fixes, plus F352)
-- **First human zero-to-running lifecycle scope:** **49.9%** *(pending full recompute — see §18 note)*
-- **MVP/product-oriented scope:** **39.7%** *(pending full recompute — see §18 note)*
-- **Agent/MCP scope:** **1.8%**
-- **Master backlog remaining:** **54.8%** (was 55.0% pre-F352)
+- **Master backlog completion:** **52.8%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0% → 45.2% → 52.8%)
+- **First human zero-to-running lifecycle scope:** **62.8%**
+- **MVP/product-oriented scope:** **51.6%**
+- **Agent/MCP scope:** **92.6%**
+- **Master backlog remaining:** **47.2%**
 
-Status count across all 352 features (350 original + F351 added 2026-09-16 for GAP-18, + F352 added 2026-09-16 for the managed Database resource feature):
+Status count across all 356 features (350 original + F351–F356 added during live product-gap work):
 
-- **COMPLETE:** 129 (was 128; +F352 new)
-- **INTERNAL_ONLY:** 6 (unchanged)
-- **PARTIAL:** 51 (unchanged)
-- **DECISION_REQUIRED:** 7 (unchanged)
-- **MISSING:** 159 (unchanged)
+- **COMPLETE:** 157
+- **INTERNAL_ONLY:** 6
+- **PARTIAL:** 55
+- **DECISION_REQUIRED:** 6
+- **MISSING:** 132
 
 > **Note on this correction (2026-09-16):** The STORY-M2-02 PRD update marked F180 (Test invoke panel) and F173–F178 COMPLETE and left F181–F190 (Flow/Gateway/domain UI) at their old MISSING/0% status with a note calling them "not audited, out of scope." The user then hit two real problems live: Test invoke creates an invocation that never executes (it stays PENDING forever - the direct-invoke path was never wired to the Dispatcher, only the Gateway's HTTP-triggered path was), and the Flow step editor has no Function/FunctionVersion picker, just raw UUID text boxes. Auditing in response found a third, unrelated gap: the Function workspace has no UI at all for environment variables/secrets, despite that backend being 100% done. The audit also found the "not audited, out of scope" claim itself was wrong in the other direction - F181 (Flow list), F183 (visual step canvas) and F186 (Gateway+Domain CRUD) were already substantially built pre-session and are now confirmed COMPLETE; F182/F187 are PARTIAL. See GAP-17, GAP-18, GAP-19 for full detail. Net effect: F180 downgraded (COMPLETE → PARTIAL), F181/F186 upgraded to COMPLETE, F182/F183/F187 upgraded to PARTIAL, F184/F185/F188/F189/F190 confirmed still MISSING.
+>
+> **Progress update (2026-09-20):** The last few days moved the roadmap materially, especially for the agent path. The MCP server now exists with real tool coverage for functions, versions, source, deployment, flows, flow versions, steps, gateways, domains, invocations, managed databases, environment profiles and Flow-level configuration; it is no longer a missing epic. New backlog items were added for the shipped capabilities that did not have F-IDs yet: Flow-shared environment profiles (F353), Flow-shared database attachments (F354), STATIC-runtime frontend deployments (F355), and path-parameter Gateway routes (F356). Remaining uncertainty is now narrower: MCP-specific token provisioning/scopes, persisted build logs, CLI, production hardening, and richer Web inspection screens.
 
 ### 3.2 Important interpretation
 
@@ -157,25 +159,24 @@ The execution core is significantly more mature than the end-user product lifecy
 - FunctionVersion create/get/list (DRAFT only; status transitions remain internal-only) — **shipped 2026-09-14**.
 - FunctionVersion source submission/replacement/read-back (zip via multipart) — **shipped 2026-09-14**.
 - FunctionVersion build/deploy to READY (`POST .../deploy`) — **shipped 2026-09-14**.
+- JSON/generated-file source submission through MCP.
 - Domain/Gateway/Certificate lifecycle.
 - Flow, FlowVersion and FlowStep CRUD/lifecycle.
-- Live exact-path Gateway routing.
+- Live exact-path and path-parameter Gateway routing.
+- Flow-level shared environment profiles and database attachments.
 - Flow Invocation creation.
 - JetStream dispatch.
 - Dispatcher execution.
 - IPC Runtime handoff.
 - Persistent Node executor.
 - Artifact retrieval/cache.
+- STATIC-runtime frontend artifact deployment and Gateway static serving.
 - HTTP response return.
 
-### Implemented but internal-only
-- Direct FunctionVersion invocation.
-- Invocation inspection.
-
 ### Missing or disconnected
-- Direct FunctionVersion invocation REST transport.
-- Controlplane Web.
-- MCP server.
+- MCP-specific token/API-key provisioning and fine-grained scopes.
+- Persisted/queryable build logs.
+- Dedicated Web invocation history/log/runtime-health screens.
 - CLI.
 - Worker-owned runtime registration and heartbeat.
 - Full restart/reconciliation hardening for orphaned runtime reservations and stuck invocations.
@@ -195,7 +196,7 @@ The execution core is significantly more mature than the end-user product lifecy
 | GAP-07 | ~~Direct invocation and invocation inspection exist internally but have no external transport.~~ **RESOLVED 2026-09-15** — invocation inspection (F118/F120, STORY-M1-09) has `GET /api/v1/invocations/{invocationId}` (durable status/result/error/identity plus full step-level detail, ownership-checked transitively through the owning Flow or FunctionVersion, via a new `InvocationInspectionHandoff` contract crossing the `invocation-contract`/`dispatcher` boundary). Direct FunctionVersion invocation (F116/F117) now also has a real transport - `POST /api/v1/functions/{functionId}/versions/{versionId}/invoke`, built while wiring STORY-M2-02's "Test invoke" panel, wrapping the already-tested `FunctionVersionInvocationService` - live-verified end-to-end through the Function workspace UI. Only F119 (list/filter invocations) stays MISSING - no story has needed it yet. | Blocks test/debug UX. | F116–F120, F167 |
 | GAP-08 | ~~Unsupported initial component can redeliver forever with Invocation stuck PENDING.~~ **RESOLVED 2026-09-15** — Flow adoption now prevents unsupported/non-terminating executable plans from becoming invocable: step component references are re-validated at adoption, positions must be strictly ascending, and the final step must be terminal (`RESPONSE` or a previously adopted/validated `SUB_FLOW`). Unsupported component types are rejected before dispatch, so the original poison ready-event loop is no longer reachable from adopted Flows. Retry/backoff and broader crash recovery remain separate open work (F133/F134). | Reliability defect. | F132 complete; F133–F134 remain open |
 | GAP-09 | ~~Runtime Registry is static/in-memory and loses capacity state across Dispatcher restarts.~~ **RESOLVED 2026-09-15** — `JdbcRuntimeRegistry` now persists runtime registration/capacity state in PostgreSQL (`runtime_instances`) and Dispatcher uses it by default, with row-level locking (`FOR UPDATE SKIP LOCKED`) for multi-Dispatcher reservation coordination. The old `InMemoryRuntimeRegistry` remains intact as a baseline/opt-in mode. Worker self-registration, heartbeat expiry, distributed leases, orphan reservation reconciliation, and full dispatcher restart replay remain future hardening work. | Production scaling/recovery gap. | F139 complete; F135/F136 partial; F264 partial |
-| GAP-10 | No MCP server, CLI, or agent-facing lifecycle exists. | Blocks agent-first product goal. | F191–F229 |
+| GAP-10 | ~~No MCP server, CLI, or agent-facing lifecycle exists.~~ **PARTIALLY RESOLVED 2026-09-20** — the MCP server now exists and exposes the same major lifecycle surfaces as REST/API: Functions, FunctionVersions, source submit/read, deploy, Flow/FlowVersion/step management, Gateway/Domain management, direct FunctionVersion invocation, Flow test invocation, Invocation inspection, environment profiles, databases, and Flow-level config. CLI remains unbuilt, and MCP-specific token provisioning/fine-grained permission scopes remain open. | Agent-first lifecycle is now viable through MCP, but not yet hardened or available as a CLI workflow. | F191–F229 |
 | GAP-11 | ~~No Controlplane Web UI exists.~~ **PARTIALLY RESOLVED 2026-09-15 (STORY-M2-02), audited and further resolved 2026-09-16** — the Web shell (F173: auth/session/nav) turned out to already be built and working; the Function workspace (F174–F180, F351) is now built and live-verified end-to-end, including a working Test invoke (GAP-17) and an environment/secrets panel (GAP-18). F179 (build log viewer) is only PARTIAL - deploy failures show their build error transiently in the current session, but nothing is persisted/queryable later, matching the backend's own F044/F045 gap. The Flow list (F181), Flow/step editor (F182, now with a real component picker - GAP-19) and Gateway/Domain CRUD (F186) were found already substantially built pre-session and are now COMPLETE; the visual step canvas (F183) is PARTIAL (core rendering confirmed, richer graph-editing capabilities not verified). Still genuinely MISSING: F185 (input-mapping UI), F188/F189/F190 (invocation history, logs, runtime health screens). F187 (route config) is only PARTIAL - set at Flow-creation time, no dedicated screen verified. | Blocks non-API human product experience. | F173–F190, F351 |
 | GAP-17 | ~~Direct FunctionVersion invocations (the "Test invoke" panel shipped in STORY-M2-02, F180) durably create an Invocation row and return it to the UI, but never actually execute.~~ **RESOLVED 2026-09-16** — two real defects, found and fixed together, live-verified end-to-end. (1) `InvocationHandoffConfig` (invocation module) wired the direct-invoke path with a `NoopInvocationEventPublisher`; now wires a real `NatsJetStreamInvocationEventPublisher`, lazily (`@Lazy` Spring beans) so the NATS connection is only opened the first time a direct invocation is actually created, not at every Spring context startup — keeps the rest of controlplane's test suite untouched. (2) Even after that fix, the Dispatcher's own `InvocationDispatcher.onStepTerminal()` only marked an Invocation COMPLETED when its terminal step was RESPONSE-typed; a direct invocation's single synthetic step is FUNCTION-typed (`JdbcInvocationRegistry.directInvocationSnapshot()`), so the step executed and completed but the parent Invocation stayed PENDING forever regardless — a second, previously-undiscovered layer of the same bug. Fixed by also treating any completed step of a `DIRECT_FUNCTION`-kind invocation as terminal. Verified live: Test invoke now shows `COMPLETED` with the function's real result within ~1s, auto-polled in the UI. | The one feature whose entire purpose is "see your function run" cannot demonstrate a run. Misleading as shipped. | F116, F117, F180 |
 | GAP-18 | ~~Function/FunctionVersion environment variables and secrets (F238–F243) are fully implemented end-to-end on the backend but have zero Controlplane Web UI.~~ **RESOLVED 2026-09-16** — added `FunctionVersionConfigResponse`/env/secret types, three `api.ts` client methods, and a "Environment & secrets" panel on the FunctionVersion detail page (two lists - env vars show their value, secrets show only their opaque `secretRef`, never a plaintext value - each with an inline add/update form using the existing `PUT .../config/env/{key}` / `.../config/secrets/{key}` upsert endpoints). No delete UI, matching the backend (upsert-only, no DELETE mapping exists). Live-verified: added a real env var and a real secret, confirmed the secret list shows only its `secretRef`, never the value. Tracked as new feature **F351** (this backlog had no F-ID for it at all - see the note in §18). | A function that needs an API key or a `DATABASE_URL` could not be configured without going around the UI (curl/Postman), defeating the point of the Web UI milestone. | F351 |
@@ -440,7 +441,7 @@ Parallel work is allowed only where it does not change these contracts.
 | F022 | Replace source while DRAFT | COMPLETE | P1 | Existing foundation | 100% |
 | F023 | Upload archive (zip/tar.gz) | COMPLETE | P1 | Existing foundation | 100% |
 | F024 | Multipart source upload | COMPLETE | P1 | Existing foundation | 100% |
-| F025 | JSON/generated-file submission for MCP | MISSING | P2 | M3 — Agent/MCP | 0% |
+| F025 | JSON/generated-file submission for MCP | COMPLETE | P2 | M3 — Agent/MCP | 100% |
 | F026 | Local directory source submission for CLI | MISSING | P2 | M4 — CLI | 0% |
 | F027 | Nested source paths | COMPLETE | P1 | Existing foundation | 100% |
 | F028 | Path traversal/security validation | COMPLETE | P1 | Existing foundation | 100% |
@@ -536,10 +537,10 @@ Parallel work is allowed only where it does not change these contracts.
 
 **User story:** Published artifacts are immutable, verifiable and maintainable
 
-**Tracked features:** F051–F059  
-**Current planning score:** **66.7%**  
-**Feature count:** 9  
-**Complete features:** 6/9
+**Tracked features:** F051–F059, F355
+**Current planning score:** **70.0%**
+**Feature count:** 10
+**Complete features:** 7/10
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
@@ -557,6 +558,10 @@ Parallel work is allowed only where it does not change these contracts.
   - [ ] garbage collection
   - [ ] retention
   - [ ] provenance metadata
+- [x] **T03 — Static frontend artifact support**
+  - [x] STATIC runtime builder
+  - [x] static artifact publishing
+  - [x] Gateway static-site cache and serving
 
 #### Feature tracking
 
@@ -571,6 +576,7 @@ Parallel work is allowed only where it does not change these contracts.
 | F057 | Artifact garbage collection | MISSING | P3 | M1 — Human zero-to-running | 0% |
 | F058 | Artifact retention policy | MISSING | P3 | M1 — Human zero-to-running | 0% |
 | F059 | Artifact provenance/build metadata | MISSING | P3 | M1 — Human zero-to-running | 0% |
+| F355 | STATIC-runtime frontend deployment | COMPLETE | P1 | M2 — Web product | 100% |
 
 ### EPIC-08 — Flow Composition
 
@@ -648,10 +654,10 @@ Parallel work is allowed only where it does not change these contracts.
 
 **User story:** Users publish adopted Flows behind managed HTTP gateways
 
-**Tracked features:** F090–F109  
-**Current planning score:** **90.0%**  
-**Feature count:** 20  
-**Complete features:** 16/20
+**Tracked features:** F090–F109, F356
+**Current planning score:** **90.5%**
+**Feature count:** 21
+**Complete features:** 17/21
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
@@ -667,6 +673,7 @@ Parallel work is allowed only where it does not change these contracts.
   - [ ] conflict checks
   - [ ] adopted Flow resolution
   - [ ] remove seed dependency
+  - [x] path-parameter matching
 - [ ] **T03 — Certificate production hardening**
   - [ ] Let's Encrypt
   - [ ] renewal
@@ -696,6 +703,7 @@ Parallel work is allowed only where it does not change these contracts.
 | F107 | Remove dependency on seed scripts | COMPLETE | P0 | M1 — Human zero-to-running | 100% |
 | F108 | Custom hostname handling | COMPLETE | P2 | Existing foundation | 100% |
 | F109 | Gateway final HTTP response correlation | COMPLETE | P2 | Existing foundation | 100% |
+| F356 | Gateway path-parameter routes (`:name`) | COMPLETE | P1 | M2 — Web product | 100% |
 
 ### EPIC-10 — Invocation Product Surface
 
@@ -973,71 +981,73 @@ Parallel work is allowed only where it does not change these contracts.
 **User story:** Coding agents can perform the same lifecycle as humans
 
 **Tracked features:** F191–F217  
-**Current planning score:** **0.4%**  
+**Current planning score:** **92.6%**
 **Feature count:** 27  
-**Complete features:** 0/27
+**Complete features:** 23/27
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
 #### Tasks
 
-- [ ] **T01 — MCP foundation**
-  - [ ] server transport
-  - [ ] self-hosted connection model
-  - [ ] auth/session mapping
-  - [ ] capability discovery
-- [ ] **T02 — Function tools**
-  - [ ] create/get/list
-  - [ ] create version
-  - [ ] submit/replace source
-  - [ ] deploy/status/logs
-- [ ] **T03 — Flow/Gateway tools**
-  - [ ] create/edit/adopt Flow
-  - [ ] steps
-  - [ ] route management
-- [ ] **T04 — Execution/debug loop**
-  - [ ] direct invoke
-  - [ ] Flow invoke
-  - [ ] inspection
-  - [ ] step/log/error retrieval
-  - [ ] iterative fix-deploy-test
-- [ ] **T05 — Security/schema quality**
-  - [ ] tokens
-  - [ ] scopes
-  - [ ] agent-friendly schemas
-  - [ ] resources
+- [x] **T01 — MCP foundation**
+  - [x] server transport
+  - [x] self-hosted connection model
+  - [x] auth/session mapping through the current user
+  - [x] capability discovery through annotated tools
+- [~] **T02 — Function tools**
+  - [x] create/get/list
+  - [x] create version
+  - [x] submit/replace/read source
+  - [x] deploy/status
+  - [ ] persisted build logs
+- [x] **T03 — Flow/Gateway tools**
+  - [x] create/edit/adopt Flow
+  - [x] steps
+  - [x] route management
+  - [x] Gateway/Domain management
+- [~] **T04 — Execution/debug loop**
+  - [x] direct invoke
+  - [x] Flow invoke
+  - [x] inspection
+  - [x] step/log/error retrieval
+  - [~] iterative fix-deploy-test through composable tools, without a dedicated agent workflow runner
+- [~] **T05 — Security/schema quality**
+  - [ ] MCP-specific token provisioning
+  - [ ] fine-grained MCP scopes
+  - [x] agent-friendly schemas
+  - [x] function/flow/config resources
 
 #### Feature tracking
 
 | ID | Feature | Status | Priority | Target/Milestone | Score |
 |---|---|---|---|---|---:|
-| F191 | MCP server foundation | MISSING | P0 | M3 — Agent/MCP | 0% |
-| F192 | Authentication/session mapping | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F193 | Capability/resource discovery | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F194 | create_function tool | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F195 | list/get_function | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F196 | create_function_version | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F197 | Source file submission | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F198 | Source replacement | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F199 | Deploy FunctionVersion | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F200 | Get deployment/build status | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F201 | Get build logs/errors | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F202 | Create Flow | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F203 | Create/edit FlowVersion | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F204 | Add/modify Flow step | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F205 | Resolve/select FunctionVersion | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F206 | Adopt FlowVersion | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F207 | Create/configure Gateway route | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F208 | Direct invoke FunctionVersion | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F209 | Invoke/test Flow | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F210 | Inspect Invocation | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F211 | Inspect step/log/error | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F212 | Iterative code → deploy → test loop | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F213 | Tool schemas optimised for coding agents | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F214 | MCP resources for functions/flows/runtimes | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F215 | Self-hosted user-specific MCP connection model | DECISION_REQUIRED | P0 | M3 — Agent/MCP | 10% |
-| F216 | MCP token/API-key provisioning | MISSING | P2 | M3 — Agent/MCP | 0% |
-| F217 | MCP permissions/scopes | MISSING | P2 | M3 — Agent/MCP | 0% |
+| F191 | MCP server foundation | COMPLETE | P0 | M3 — Agent/MCP | 100% |
+| F192 | Authentication/session mapping | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F193 | Capability/resource discovery | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F194 | create_function tool | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F195 | list/get_function | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F196 | create_function_version | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F197 | Source file submission | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F198 | Source replacement | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F199 | Deploy FunctionVersion | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F200 | Get deployment/build status | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F201 | Get build logs/errors | PARTIAL | P2 | M3 — Agent/MCP | 50% |
+| F202 | Create Flow | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F203 | Create/edit FlowVersion | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F204 | Add/modify Flow step | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F205 | Resolve/select FunctionVersion | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F206 | Adopt FlowVersion | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F207 | Create/configure Gateway route | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F208 | Direct invoke FunctionVersion | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F209 | Invoke/test Flow | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F210 | Inspect Invocation | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F211 | Inspect step/log/error | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F212 | Iterative code → deploy → test loop | PARTIAL | P2 | M3 — Agent/MCP | 50% |
+| F213 | Tool schemas optimised for coding agents | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F214 | MCP resources for functions/flows/runtimes | COMPLETE | P2 | M3 — Agent/MCP | 100% |
+| F215 | Self-hosted user-specific MCP connection model | COMPLETE | P0 | M3 — Agent/MCP | 100% |
+| F216 | MCP token/API-key provisioning | PARTIAL | P2 | M3 — Agent/MCP | 50% |
+| F217 | MCP permissions/scopes | PARTIAL | P2 | M3 — Agent/MCP | 50% |
 
 ### EPIC-16 — CLI
 
@@ -1129,16 +1139,18 @@ Parallel work is allowed only where it does not change these contracts.
 
 **User story:** Functions receive secure runtime configuration
 
-**Tracked features:** F238–F245, F352  
-**Current planning score:** **83.3%**  
-**Feature count:** 9  
-**Complete features:** 7/9
+**Tracked features:** F238–F245, F352–F354
+**Current planning score:** **86.4%**
+**Feature count:** 11
+**Complete features:** 9/11
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
 **Status:** Runtime injection delivered 2026-09-15 — `FunctionVersionConfigController` exposes authenticated get/upsert APIs under the exact FunctionVersion resource. `function_version_env_vars` stores plain non-secret values in PostgreSQL. `function_version_secrets` stores only OpenBao secret references, while `OpenBaoFunctionSecretStore` writes the actual secret value to OpenBao. Dispatcher resolves the exact FunctionVersion environment, reads secret values through OpenBao, sends the resolved map over IPC, and the Node Runtime injects it into `process.env` for the artifact handler. Secret redaction, rotation, resource governance, and network-policy hardening remain future work.
 
 **Status (2026-09-16 — new Database resource, F352):** Following a design discussion about shared/warm DB connections across Functions, built a first-class `Database` resource so FuncHole - not the function author - owns the connection. A `Database` (top-level, owned by `AppUser`, like `Function`) stores host/port/credentials; the password is written to OpenBao via a new `FunctionSecretStore.saveForDatabase(databaseId, key, value)` method (never stored in Postgres, matching the existing `function_version_secrets` discipline) and referenced by `password_secret_ref`. A new many-to-many `function_version_database_attachments` join table lets a FunctionVersion attach zero or more Databases (`PUT`/`DELETE`/`GET` under `/api/v1/functions/{functionId}/versions/{versionId}/databases`). At invocation time, a new `JdbcFunctionVersionDatabaseResolver` (dispatcher module) resolves the attached databases (joining `function_version_database_attachments` ⋈ `databases`, reading the password back from OpenBao) into a new `DatabaseConnectionInfo` record, threaded through the full Dispatcher → Runtime Worker → Node executor IPC chain (`RuntimeExecutionRequest` → `IpcInvokePayload` → `RuntimeInvokePayload` → `NodeExecutionRequest` → `NodeExecuteMessage`, each side of the process boundary independently declaring the same field, matching the existing `environment` field's pattern - no shared Java types across the boundary). `executor.mjs` now calls `handler(input, context)` (a non-breaking second argument - existing single-argument handlers are unaffected) where `context.db(name)` returns a warm `pg.Pool`, cached per distinct database resource for the life of the Node process (added the `pg` npm dependency under `runtime/node/`, wired into the Docker image's `runtime-worker` stage via `npm ci`). Database passwords are added to the existing console-log redactor alongside secrets. Scope, confirmed with the user before building: all four engines (Postgres, Supabase, MongoDB, MySQL) are intended, but only **Postgres, external connections only** is built now - internal/Docker-provisioned databases and the other three engines are deliberately deferred, with the schema (`databases.type` as a plain extensible VARCHAR) and the resolver/executor scaffolding built to add them later without a redesign. Frontend: a new `/databases` CRUD page (mirroring the existing Functions page exactly) plus a "Databases" panel on the FunctionVersion detail page (attach/detach, mirroring the existing "Environment & secrets" panel). Live-verified end-to-end against the real running dev stack: created a `devdb` Database pointed at the dev Postgres container, attached it to a real FunctionVersion, deployed, and invoked a function whose handler ran `context.db("devdb").query(...)` - both through `curl` and through the actual browser UI - confirming a real SQL round-trip (`{"row": {"db": "funchole", "sum": 2}}`) and pool reuse across repeated invocations (no new Node executor process per call).
+
+**Status (2026-09-20 — Flow-shared configuration, F353/F354):** Environment profiles and database resources can now be attached at the Flow level so every FunctionVersion executed inside that Flow can inherit the same environment/secrets and database context without duplicating attachments on each function. The Dispatcher-side resolvers merge Flow-level configuration with exact FunctionVersion configuration before IPC, preserving the current storage boundary: non-secret values in PostgreSQL, secret values in OpenBao, and runtime execution receiving only resolved values. This closes the product gap raised during Flow adoption work: credentials and shared settings can now be modeled once per Flow.
 
 #### Tasks
 
@@ -1163,6 +1175,12 @@ Parallel work is allowed only where it does not change these contracts.
   - [x] Databases web UI + FunctionVersion attachment panel
   - [ ] internal/Docker-provisioned databases
   - [ ] MySQL/MongoDB/Supabase-client engines
+- [x] **T05 — Flow-shared configuration**
+  - [x] EnvironmentProfile CRUD and secret/env storage
+  - [x] Flow↔EnvironmentProfile attachment with priority
+  - [x] Flow↔Database attachment
+  - [x] Dispatcher/runtime inheritance for all steps under the Flow
+  - [x] REST and MCP surfaces for Flow configuration
 
 #### Feature tracking
 
@@ -1177,6 +1195,8 @@ Parallel work is allowed only where it does not change these contracts.
 | F244 | Outbound network policy | MISSING | P2 | M5 — Product hardening | 0% |
 | F245 | Runtime DNS/network access | PARTIAL | P2 | M5 — Product hardening | 50% |
 | F352 | Managed Database resource (`context.db()`) | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
+| F353 | Flow-shared environment profiles | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
+| F354 | Flow-shared database attachments | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
 
 ### EPIC-19 — Observability
 
@@ -2054,7 +2074,7 @@ They remain fully tracked in F321–F343 and F335–F338.
 
 ---
 
-## 16. Complete F001–F350 (+F351, +F352) master tracking matrix
+## 16. Complete F001–F350 (+F351–F356) master tracking matrix
 
 This is the authoritative checklist for this PRD.
 
@@ -2084,7 +2104,7 @@ This is the authoritative checklist for this PRD.
 | F022 | Source | Replace source while DRAFT | COMPLETE | 100% | P1 | Existing foundation |
 | F023 | Source | Upload archive (zip/tar.gz) | COMPLETE | 100% | P1 | Existing foundation |
 | F024 | Source | Multipart source upload | COMPLETE | 100% | P1 | Existing foundation |
-| F025 | Source | JSON/generated-file submission for MCP | MISSING | 0% | P2 | M3 — Agent/MCP |
+| F025 | Source | JSON/generated-file submission for MCP | COMPLETE | 100% | P2 | M3 — Agent/MCP |
 | F026 | Source | Local directory source submission for CLI | MISSING | 0% | P2 | M4 — CLI |
 | F027 | Source | Nested source paths | COMPLETE | 100% | P1 | Existing foundation |
 | F028 | Source | Path traversal/security validation | COMPLETE | 100% | P1 | Existing foundation |
@@ -2119,6 +2139,7 @@ This is the authoritative checklist for this PRD.
 | F057 | Artifact | Artifact garbage collection | MISSING | 0% | P3 | M1 — Human zero-to-running |
 | F058 | Artifact | Artifact retention policy | MISSING | 0% | P3 | M1 — Human zero-to-running |
 | F059 | Artifact | Artifact provenance/build metadata | MISSING | 0% | P3 | M1 — Human zero-to-running |
+| F355 | Artifact | STATIC-runtime frontend deployment | COMPLETE | 100% | P1 | M2 — Web product |
 | F060 | Flow | Create Flow | COMPLETE | 100% | P0 | Existing foundation |
 | F061 | Flow | Get/List Flow | COMPLETE | 100% | P1 | Existing foundation |
 | F062 | Flow | Update Flow metadata | COMPLETE | 100% | P1 | Existing foundation |
@@ -2169,6 +2190,7 @@ This is the authoritative checklist for this PRD.
 | F107 | Route | Remove dependency on seed scripts | COMPLETE | 100% | P0 | M1 — Human zero-to-running |
 | F108 | Gateway | Custom hostname handling | COMPLETE | 100% | P2 | Existing foundation |
 | F109 | Gateway | Gateway final HTTP response correlation | COMPLETE | 100% | P2 | Existing foundation |
+| F356 | Route | Gateway path-parameter routes (`:name`) | COMPLETE | 100% | P1 | M2 — Web product |
 | F110 | Invocation | Create FLOW Invocation | COMPLETE | 100% | P2 | Existing foundation |
 | F111 | Invocation | Immutable execution snapshot | COMPLETE | 100% | P2 | Existing foundation |
 | F112 | Invocation | FLOW / DIRECT_FUNCTION identity | COMPLETE | 100% | P2 | Existing foundation |
@@ -2251,33 +2273,33 @@ This is the authoritative checklist for this PRD.
 | F189 | Web UI | Logs/error viewer | MISSING | 0% | P1 | M2 — Web product |
 | F190 | Web UI | Runtime/health overview | MISSING | 0% | P3 | M2 — Web product |
 | F351 | Web UI | Function/FunctionVersion environment variables & secrets UI | COMPLETE | 100% | P1 | M2 — Web product |
-| F191 | MCP | MCP server foundation | MISSING | 0% | P0 | M3 — Agent/MCP |
-| F192 | MCP | Authentication/session mapping | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F193 | MCP | Capability/resource discovery | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F194 | MCP | create_function tool | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F195 | MCP | list/get_function | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F196 | MCP | create_function_version | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F197 | MCP | Source file submission | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F198 | MCP | Source replacement | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F199 | MCP | Deploy FunctionVersion | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F200 | MCP | Get deployment/build status | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F201 | MCP | Get build logs/errors | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F202 | MCP | Create Flow | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F203 | MCP | Create/edit FlowVersion | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F204 | MCP | Add/modify Flow step | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F205 | MCP | Resolve/select FunctionVersion | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F206 | MCP | Adopt FlowVersion | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F207 | MCP | Create/configure Gateway route | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F208 | MCP | Direct invoke FunctionVersion | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F209 | MCP | Invoke/test Flow | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F210 | MCP | Inspect Invocation | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F211 | MCP | Inspect step/log/error | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F212 | MCP | Iterative code → deploy → test loop | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F213 | MCP | Tool schemas optimised for coding agents | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F214 | MCP | MCP resources for functions/flows/runtimes | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F215 | MCP | Self-hosted user-specific MCP connection model | DECISION_REQUIRED | 10% | P0 | M3 — Agent/MCP |
-| F216 | MCP | MCP token/API-key provisioning | MISSING | 0% | P2 | M3 — Agent/MCP |
-| F217 | MCP | MCP permissions/scopes | MISSING | 0% | P2 | M3 — Agent/MCP |
+| F191 | MCP | MCP server foundation | COMPLETE | 100% | P0 | M3 — Agent/MCP |
+| F192 | MCP | Authentication/session mapping | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F193 | MCP | Capability/resource discovery | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F194 | MCP | create_function tool | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F195 | MCP | list/get_function | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F196 | MCP | create_function_version | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F197 | MCP | Source file submission | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F198 | MCP | Source replacement | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F199 | MCP | Deploy FunctionVersion | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F200 | MCP | Get deployment/build status | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F201 | MCP | Get build logs/errors | PARTIAL | 50% | P2 | M3 — Agent/MCP |
+| F202 | MCP | Create Flow | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F203 | MCP | Create/edit FlowVersion | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F204 | MCP | Add/modify Flow step | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F205 | MCP | Resolve/select FunctionVersion | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F206 | MCP | Adopt FlowVersion | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F207 | MCP | Create/configure Gateway route | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F208 | MCP | Direct invoke FunctionVersion | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F209 | MCP | Invoke/test Flow | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F210 | MCP | Inspect Invocation | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F211 | MCP | Inspect step/log/error | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F212 | MCP | Iterative code → deploy → test loop | PARTIAL | 50% | P2 | M3 — Agent/MCP |
+| F213 | MCP | Tool schemas optimised for coding agents | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F214 | MCP | MCP resources for functions/flows/runtimes | COMPLETE | 100% | P2 | M3 — Agent/MCP |
+| F215 | MCP | Self-hosted user-specific MCP connection model | COMPLETE | 100% | P0 | M3 — Agent/MCP |
+| F216 | MCP | MCP token/API-key provisioning | PARTIAL | 50% | P2 | M3 — Agent/MCP |
+| F217 | MCP | MCP permissions/scopes | PARTIAL | 50% | P2 | M3 — Agent/MCP |
 | F218 | CLI | CLI foundation/auth/config | MISSING | 0% | P1 | M4 — CLI |
 | F219 | CLI | function create/list/get | MISSING | 0% | P2 | M4 — CLI |
 | F220 | CLI | version create | MISSING | 0% | P2 | M4 — CLI |
@@ -2307,6 +2329,8 @@ This is the authoritative checklist for this PRD.
 | F244 | Networking | Outbound network policy | MISSING | 0% | P2 | M5 — Product hardening |
 | F245 | Networking | Runtime DNS/network access | PARTIAL | 50% | P2 | M5 — Product hardening |
 | F352 | Database | Managed Database resource (`context.db()`) | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
+| F353 | Configuration | Flow-shared environment profiles | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
+| F354 | Database | Flow-shared database attachments | COMPLETE | 100% | P1 | M1 — Human zero-to-running |
 | F246 | Observability | Invocation structured logs | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
 | F247 | Observability | Function stdout/stderr capture | PARTIAL | 50% | P1 | M1 — Human zero-to-running |
 | F248 | Observability | Logs persisted/queryable | MISSING | 0% | P1 | M1 — Human zero-to-running |
@@ -2420,16 +2444,16 @@ This is the authoritative checklist for this PRD.
 | Epic | Feature count | Current progress |
 |---|---:|---:|
 | Agent UX | 4 | 12.5% |
-| Artifact | 9 | 66.7% |
+| Artifact | 10 | 70.0% |
 | Auth | 5 | 20.0% |
 | Authorization | 2 | 25.0% |
 | Build | 14 | 48.6% |
 | Business | 4 | 0.0% |
 | CLI | 12 | 0.0% |
 | Certificate | 5 | 70.0% |
-| Configuration | 1 | 100.0% |
+| Configuration | 2 | 100.0% |
 | Controlplane API | 17 | 67.6% |
-| Database | 1 | 100.0% |
+| Database | 2 | 100.0% |
 | DNS | 1 | 100.0% |
 | Developer UX | 6 | 33.3% |
 | Dispatcher | 10 | 75.0% |
@@ -2447,7 +2471,7 @@ This is the authoritative checklist for this PRD.
 | Git Integration | 4 | 0.0% |
 | Import/Export | 3 | 0.0% |
 | Invocation | 15 | 51.3% |
-| MCP | 27 | 0.4% |
+| MCP | 27 | 92.6% |
 | Multi-tenancy | 1 | 0.0% |
 | Networking | 2 | 25.0% |
 | OSS | 4 | 27.5% |
@@ -2456,18 +2480,18 @@ This is the authoritative checklist for this PRD.
 | Project Model | 2 | 10.0% |
 | Reliability | 9 | 16.7% |
 | Resource Mgmt | 6 | 16.7% |
-| Route | 8 | 81.2% |
+| Route | 9 | 83.3% |
 | Runtime | 16 | 43.8% |
 | Runtime Catalog | 3 | 0.0% |
 | Runtime Registry | 5 | 80.0% |
 | Secrets | 5 | 100.0% |
 | Security | 8 | 6.2% |
-| Source | 15 | 70.0% |
+| Source | 15 | 76.7% |
 | Testing | 10 | 31.0% |
 | Traffic | 3 | 0.0% |
 | Triggers | 3 | 0.0% |
 | Versions | 4 | 0.0% |
-| Web UI | 18 | 0.0% |
+| Web UI | 19 | 72.4% |
 
 ---
 
@@ -2475,17 +2499,19 @@ This is the authoritative checklist for this PRD.
 
 ### Overall
 
-- **352 / 352** master backlog candidates are represented in this PRD (F001–F350, plus F351 added 2026-09-16 - see GAP-18 and the note below - plus F352 added 2026-09-16 for the new managed Database resource feature).
-- **Current master-backlog implementation score:** **45.2%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0% → 45.2%, EPIC-02 through GAP-17/18/19 fixes, plus F352)
-- **Remaining master-backlog scope by score:** **54.8%**
-- **First human zero-to-running lifecycle score:** **49.9%** *(not yet recalculated — see note below)*
-- **Agent/MCP score:** **1.8%**
+- **356 / 356** master backlog candidates are represented in this PRD (F001–F350, plus F351–F356 added during live product-gap work).
+- **Current master-backlog implementation score:** **52.8%** (28.7% → 30.4% → 31.4% → 34.1% → 36.0% → 37.0% → 37.1% → 37.4% → 37.8% → 38.1% → 38.7% → 39.7% → 40.4% → 40.8% → 43.4% → 44.4% → 45.0% → 45.2% → 52.8%)
+- **Remaining master-backlog scope by score:** **47.2%**
+- **First human zero-to-running lifecycle score:** **62.8%**
+- **Agent/MCP score:** **92.6%**
 
 > **Note on this update (2026-09-15):** M1 is fully shipped (all 10 stories), and M2 (Controlplane Web) has now started with **STORY-M2-02 (Function workspace)**. Scoping it first surfaced that STORY-M2-01 (Web shell) was already built and working - not by this session, but verified live (login, session, typed API client, nav) - so the story list reflects that as already done rather than reopening it. The Function workspace itself (`/functions`, `/functions/[id]`, `/functions/[id]/versions/[id]`) is now built and live-verified end-to-end: create Function → draft version → source editor (upload or paste-and-edit) → deploy to a real READY artifact → direct test invocation → inspect the resulting invocation via STORY-M1-09's endpoint - reusing the shell's existing design system/components exactly, in both light and dark mode. This closed **F173–F178** and, as a necessary side effect, **F116/F117** (direct invocation had a tested service but no REST transport until now) via a new `POST /api/v1/functions/{functionId}/versions/{versionId}/invoke`. **F179** (build log viewer) is only PARTIAL - deploy failures show their build error transiently in the session that triggered them, nothing persisted/queryable, matching the backend's own F044/F045 gap. Two real bugs were found and fixed live, not part of any story's original scope: **GAP-16** (`InvocationInspectionAccessService.inspect()` threw `LazyInitializationException` on a real HTTP request despite its own test suite passing, since those tests are `@Transactional` and a real request isn't - fixed by adding the same annotation), and a frontend source-editor race (it decided whether to show itself before its initial fetch had resolved, so it always opened at least once regardless of whether source already existed - fixed by gating that decision on the fetch settling).
 >
-> **Correction and fixes (2026-09-16):** STORY-M2-02's own update was wrong in two directions, both found live by the user testing the shipped feature, not by this session's own review - and then fixed in the same session, not just documented. (1) **GAP-17**: the Test invoke panel (F180) created a durable Invocation that never executed. Root cause had two layers. First, `InvocationHandoffConfig` (invocation module) wired the direct-invoke path to a `NoopInvocationEventPublisher` instead of the real NATS-backed one Gateway/Dispatcher already use - fixed by wiring a real `NatsJetStreamInvocationEventPublisher`, made lazy (`@Lazy` Spring beans) so the rest of controlplane's test suite, which never triggers a direct invocation, never opens a NATS connection at Spring context startup. Second, once that was fixed, the Dispatcher's `InvocationDispatcher.onStepTerminal()` turned out to only mark an Invocation COMPLETED when its terminal step was RESPONSE-typed - a direct invocation's single synthetic step is FUNCTION-typed, so the step itself completed but the parent Invocation stayed PENDING forever regardless, a second bug nobody had found before because GAP-17's first layer had always blocked the code from reaching it. Fixed by also treating any completed step of a DIRECT_FUNCTION-kind invocation as terminal. F180 restored to COMPLETE. (2) An audit of F181–F190 (Flow/Gateway/domain UI), prompted by the user separately hitting a raw-UUID step editor, found the original "not audited, out of scope" note undersold what already existed: the Flow list (**F181**), Flow/step editor, and visual step canvas (**F183**), plus Gateway and Domain CRUD (**F186**), were already substantially built pre-session - now COMPLETE or PARTIAL instead of MISSING. What the audit did confirm genuinely missing was **F184**: no Function/FunctionVersion (or Flow/FlowVersion, for SUB_FLOW steps) picker in the Flow step editor, just raw UUID text boxes - fixed with a `ComponentPicker` (name-based dropdowns, filtered to READY FunctionVersions / ADOPTED FlowVersions), F184 now COMPLETE, F182 raised to COMPLETE alongside it. (3) **GAP-18**, found the same way: the Function workspace had zero UI for environment variables/secrets despite a fully complete backend (F238–F243) - built an "Environment & secrets" panel (env vars show their value; secrets show only their opaque `secretRef`, never a plaintext value), tracked as new feature **F351** since no F-ID existed for it at all. All three fixes live-verified end-to-end against the real running dev stack (real NATS, real Dispatcher, real Postgres) - not mocked. The master backlog score above and the status counts are recalculated from the F001–F350(+F351) table (verified by parsing it programmatically). The three milestone-scoped sub-percentages (human zero-to-running, MVP/product-oriented, Agent/MCP) are still left at their prior values pending a full recompute pass with an explicit, documented scope rule.
+> **Correction and fixes (2026-09-16):** STORY-M2-02's own update was wrong in two directions, both found live by the user testing the shipped feature, not by this session's own review - and then fixed in the same session, not just documented. (1) **GAP-17**: the Test invoke panel (F180) created a durable Invocation that never executed. Root cause had two layers. First, `InvocationHandoffConfig` (invocation module) wired the direct-invoke path to a `NoopInvocationEventPublisher`; now wires a real `NatsJetStreamInvocationEventPublisher`, lazily (`@Lazy` Spring beans) so the NATS connection is only opened the first time a direct invocation is actually created, not at every Spring context startup - keeps the rest of controlplane's test suite untouched. Second, once that was fixed, the Dispatcher's own `InvocationDispatcher.onStepTerminal()` only marked an Invocation COMPLETED when its terminal step was RESPONSE-typed; a direct invocation's single synthetic step is FUNCTION-typed, so the step executed and completed but the parent Invocation stayed PENDING forever regardless, a second, previously-undiscovered layer of the same bug. Fixed by also treating any completed step of a `DIRECT_FUNCTION`-kind invocation as terminal. F180 restored to COMPLETE. (2) An audit of F181–F190 (Flow/Gateway/domain UI), prompted by the user separately hitting a raw-UUID step editor, found the original "not audited, out of scope" note undersold what already existed: the Flow list (**F181**), Flow/step editor, and visual step canvas (**F183**), plus Gateway and Domain CRUD (**F186**), were already substantially built pre-session - now COMPLETE or PARTIAL instead of MISSING. What the audit did confirm genuinely missing was **F184**: no Function/FunctionVersion (or Flow/FlowVersion, for SUB_FLOW steps) picker in the Flow step editor, just raw UUID text boxes - fixed with a `ComponentPicker` (name-based dropdowns, filtered to READY FunctionVersions / ADOPTED FlowVersions), F184 now COMPLETE, F182 raised to COMPLETE alongside it. (3) **GAP-18**, found the same way: the Function workspace had zero UI for environment variables/secrets despite a fully complete backend (F238–F243) - built an "Environment & secrets" panel (env vars show their value; secrets show only their opaque `secretRef`, never a plaintext value), tracked as new feature **F351** since no F-ID existed for it at all. All three fixes were live-verified end-to-end against the real running dev stack (real NATS, real Dispatcher, real Postgres) - not mocked. At that point, the master backlog score and status counts were recalculated from the F001–F350(+F351) table; the current 2026-09-20 recalculation supersedes those older percentages.
 >
 > **New feature (2026-09-16): managed Database resource, F352.** Prompted by a design discussion about shared/warm DB connections across Functions (opening a connection per invocation doesn't scale, and multiple Functions often need the same connection), built a first-class `Database` resource - scoped and confirmed with the user before implementation (all four engines - Postgres/Supabase/MongoDB/MySQL - are the intended eventual scope; **Postgres, external connections only** is what's actually built now). FuncHole owns the connection, not the function author: a `Database` (top-level resource, like `Function`) stores host/port/credentials with the password held only in OpenBao; a FunctionVersion attaches zero or more Databases via a new many-to-many join table; at invocation time the Dispatcher resolves attached databases (password included, read back from OpenBao) and threads them through the existing IPC chain exactly like `environment` already is (each of the three module boundaries - dispatcher, runtime, and the final Node stdin JSON - independently declaring the same `databases` field, no shared Java type, matching this codebase's established IPC pattern). The Node executor exposes a non-breaking `handler(input, context)` second argument, where `context.db(name)` returns a `pg.Pool` cached for the life of the warm Node process - so repeated invocations of the same (or a different) Function reuse the same pool rather than reconnecting. Shipped with a `/databases` CRUD page and a FunctionVersion attachment panel in the web UI, mirroring existing pages/panels exactly. Live-verified end-to-end against the real dev stack, through both `curl` and the browser: created a Database pointed at the dev Postgres container, attached it to a real FunctionVersion, deployed, and invoked a function whose handler ran a real SQL query through `context.db(...)` - confirmed the correct result and pool reuse across repeated invocations. Tracked as **F352** under EPIC-18 (Configuration, Secrets & Networking), which had no existing F-ID for this capability.
+>
+> **Progress update (2026-09-20):** Re-audited recent commits through `b14d2b0` and updated the backlog for four newly shipped capabilities that were not represented by prior feature IDs: Flow-shared environment profiles (F353), Flow-shared database attachments (F354), STATIC-runtime frontend deployment (F355), and Gateway path-parameter routes (F356). MCP was also recalculated from the actual `controlplane/mcp` tool surface instead of the old placeholder status, moving EPIC-15 from effectively missing to mostly complete. Remaining MCP gaps are now focused on dedicated token provisioning, fine-grained permission scopes, persisted build logs, and a first-class iterative workflow wrapper; the core tools are present.
 
 ### What the percentage does *not* mean
 
