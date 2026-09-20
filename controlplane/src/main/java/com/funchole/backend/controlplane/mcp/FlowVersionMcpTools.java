@@ -151,7 +151,10 @@ public class FlowVersionMcpTools {
                     + "silently ignored. If you need to serve raw HTML/CSS/JS with the correct Content-Type (a "
                     + "frontend/UI page), do not return HTML as a string from a NODE function - deploy it as a "
                     + "STATIC-runtime Function instead (see create_function's runtime parameter) and route a Flow "
-                    + "to it; the Gateway then serves the files directly with no RESPONSE step needed."
+                    + "to it; the Gateway then serves the files directly with no RESPONSE step needed. A "
+                    + "componentId/componentVersionId can be reused by any number of steps across any number of "
+                    + "Flows - a shared STATIC asset bundle (a common design system, logo, etc.) only needs to be "
+                    + "deployed and referenced once, not cloned into every site that uses it."
     )
     public FlowStepResponse createFlowStep(
             @McpToolParam(description = "Flow id (UUID)") String flowId,

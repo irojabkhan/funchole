@@ -63,7 +63,13 @@ public class FunctionMcpTools {
             @McpToolParam(description = "Description", required = false) String description,
             @McpToolParam(description = "Runtime: NODE (runs your handler code - use for a backend/API function) "
                     + "or STATIC (serves a pre-built static site's files directly, no code execution - use for a "
-                    + "frontend/UI). Defaults to NODE.", required = false) String runtime
+                    + "frontend/UI). Defaults to NODE. For assets (CSS/JS/images) shared by multiple sites, do not "
+                    + "duplicate them into every Function's own source: deploy them once as their own STATIC "
+                    + "Function+Flow (e.g. mounted at '/shared/*'), then reference them by absolute path (starting "
+                    + "with '/', e.g. '/shared/style.css') from any other site's HTML - a Flow step's "
+                    + "componentVersionId can be reused across as many Flows/steps as you want, no cloning needed. "
+                    + "A relative reference (no leading '/') only resolves within that page's own site, since the "
+                    + "Gateway injects a <base href> scoped to it.", required = false) String runtime
     ) throws NotFoundException {
         AppUser appUser = profileService.loadUserById(CurrentMcpUser.id());
         Function created = functionService.createFunction(appUser, new FunctionCreateRequest(functionKey, name, description, runtime));

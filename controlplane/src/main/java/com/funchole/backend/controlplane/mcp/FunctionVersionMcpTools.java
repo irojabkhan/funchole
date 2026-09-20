@@ -112,7 +112,18 @@ public class FunctionVersionMcpTools {
                     + "those two fields, always JSON-encodes body, and always sends Content-Type: application/json "
                     + "(any statusCode/headers fields are ignored). Returning an HTML string in body will be "
                     + "JSON-encoded, not rendered - for a frontend/UI page, deploy a STATIC-runtime Function "
-                    + "instead (see create_function's runtime parameter), not a NODE function returning HTML."
+                    + "instead (see create_function's runtime parameter), not a NODE function returning HTML.\n"
+                    + "For a STATIC-runtime Function, submit a real multi-page site here - do not put everything "
+                    + "in one page. A route like '/about' automatically resolves, in order, to an exact file "
+                    + "named 'about', then 'about.html', then 'about/index.html' - the same clean-URL convention "
+                    + "every static host uses, and exactly what a static site generator's default output already "
+                    + "looks like. Only a path with none of those is handed the root index.html (SPA-style "
+                    + "client-side routing) - so plain multi-page sites and SPAs both work without extra Flows. "
+                    + "Each page's own relative asset references (e.g. href=\"style.css\") always resolve "
+                    + "correctly regardless of the page's depth or how the browser reached it - a <base href> is "
+                    + "injected automatically. A STATIC submission needs a package.json with a \"build\" script "
+                    + "(entrypoint \"package.json\") that produces a dist/build/out directory containing the "
+                    + "site's files, including its own index.html."
     )
     public FunctionVersionSourceResponse submitFunctionVersionSource(
             @McpToolParam(description = "Function id (UUID)") String functionId,
