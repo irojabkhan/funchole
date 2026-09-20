@@ -66,4 +66,61 @@ class StaticFileResolverTests {
 
         assertTrue(resolved.isEmpty());
     }
+
+    @Test
+    void resolvesACleanUrlToItsFlatHtmlFile() throws IOException {
+        Files.writeString(siteRoot.resolve("index.html"), "<html>root</html>");
+        Files.writeString(siteRoot.resolve("about.html"), "<html>about</html>");
+
+        Optional<Path> resolved = StaticFileResolver.resolve(siteRoot, "about");
+
+        assertTrue(resolved.isPresent());
+        assertEquals(siteRoot.resolve("about.html"), resolved.get());
+    }
+
+    @Test
+    void resolvesACleanUrlToItsDirectoryIndexFile() throws IOException {
+        Files.writeString(siteRoot.resolve("index.html"), "<html>root</html>");
+        Files.createDirectories(siteRoot.resolve("about"));
+        Files.writeString(siteRoot.resolve("about/index.html"), "<html>about</html>");
+
+        Optional<Path> resolved = StaticFileResolver.resolve(siteRoot, "about");
+
+        assertTrue(resolved.isPresent());
+        assertEquals(siteRoot.resolve("about/index.html"), resolved.get());
+    }
+
+    @Test
+    void resolvesACleanUrlWithATrailingSlashToItsDirectoryIndexFile() throws IOException {
+        Files.writeString(siteRoot.resolve("index.html"), "<html>root</html>");
+        Files.createDirectories(siteRoot.resolve("about"));
+        Files.writeString(siteRoot.resolve("about/index.html"), "<html>about</html>");
+
+        Optional<Path> resolved = StaticFileResolver.resolve(siteRoot, "about/");
+
+        assertTrue(resolved.isPresent());
+        assertEquals(siteRoot.resolve("about/index.html"), resolved.get());
+    }
+
+    @Test
+    void anExactFileStillWinsOverACleanUrlCandidate() throws IOException {
+        Files.writeString(siteRoot.resolve("index.html"), "<html>root</html>");
+        Files.writeString(siteRoot.resolve("about"), "literal file named 'about', no extension");
+        Files.writeString(siteRoot.resolve("about.html"), "<html>about</html>");
+
+        Optional<Path> resolved = StaticFileResolver.resolve(siteRoot, "about");
+
+        assertTrue(resolved.isPresent());
+        assertEquals(siteRoot.resolve("about"), resolved.get());
+    }
+
+    @Test
+    void fallsBackToRootIndexWhenNoCleanUrlCandidateExistsEither() throws IOException {
+        Files.writeString(siteRoot.resolve("index.html"), "<html>root</html>");
+
+        Optional<Path> resolved = StaticFileResolver.resolve(siteRoot, "contact");
+
+        assertTrue(resolved.isPresent());
+        assertEquals(siteRoot.resolve("index.html"), resolved.get());
+    }
 }

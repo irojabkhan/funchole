@@ -10,6 +10,7 @@ import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.RouteMatch;
 import com.funchole.backend.gateway.staticsite.StaticContentTypes;
 import com.funchole.backend.gateway.staticsite.StaticFileResolver;
+import com.funchole.backend.gateway.staticsite.StaticIndexHtml;
 import com.funchole.backend.gateway.staticsite.StaticSiteCache;
 import com.funchole.backend.invocation.CreateInvocationRequest;
 import com.funchole.backend.invocation.Invocation;
@@ -188,8 +189,15 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
                 return;
             }
 
+            if (StaticIndexHtml.isIndexHtml(file.get())) {
+                String mountRoot = staticSiteMountRoot(flow, requestContext.path());
+                String baseHref = StaticIndexHtml.baseHrefFor(siteRoot.get(), file.get(), mountRoot);
+                content = StaticIndexHtml.withBaseHref(content, baseHref);
+            }
+
             String contentType = StaticContentTypes.forPath(file.get());
-            runOnEventLoop(context, () -> writeBytes(context, HttpResponseStatus.OK, contentType, content));
+            byte[] responseBody = content;
+            runOnEventLoop(context, () -> writeBytes(context, HttpResponseStatus.OK, contentType, responseBody));
         });
     }
 
@@ -208,6 +216,20 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         return requestPath.startsWith(flow.routePrefix())
                 ? requestPath.substring(flow.routePrefix().length())
                 : "";
+    }
+
+    /**
+     * The site's own root, always ending in "/", used as the served page's
+     * {@code <base href>} (see {@link StaticIndexHtml}) - a wildcard Flow's
+     * own {@code routePrefix} already ends in "/"; an exact-path Flow has
+     * none, so the request path itself (which for an exact match is always
+     * exactly the Flow's own registered path) is normalized to end in one.
+     */
+    private String staticSiteMountRoot(FlowResolution flow, String requestPath) {
+        if (flow.routePrefix() != null) {
+            return flow.routePrefix();
+        }
+        return requestPath.endsWith("/") ? requestPath : requestPath + "/";
     }
 
     /**
