@@ -6,6 +6,12 @@ x-s3-artifact-env: &s3-artifact-env
   S3_ARTIFACT_REGION: ${S3_ARTIFACT_REGION:-us-east-1}
   S3_ARTIFACT_PATH_STYLE_ACCESS: "true"
 
+x-app-secrets-env: &app-secrets-env
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your .env file (see .env.example)}
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your .env file (see .env.example)}
+  BOOTSTRAP_USERNAME: ${BOOTSTRAP_USERNAME:?Set BOOTSTRAP_USERNAME in your .env file (see .env.example)}
+  BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:?Set BOOTSTRAP_PASSWORD in your .env file (see .env.example)}
+
 services:
   controlplane:
     build:
@@ -97,7 +103,7 @@ services:
       BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       DB_URL: jdbc:postgresql://db:5432/funchole
       DB_USERNAME: funchole
-      DB_PASSWORD: funchole
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your .env file (see .env.example)}
       DEV_RUNTIME_INSTANCE_ID: runtime-node-1
       DEV_RUNTIME_TYPE: NODE
       DEV_RUNTIME_SOCKET_PATH: /tmp/funchole/runtime-node-1.sock
@@ -192,6 +198,7 @@ services:
       openbao:
         condition: service_started
     environment:
+      <<: *app-secrets-env
       BAO_ADDR: http://openbao:8200
       OPENBAO_STATE_DIR: /openbao/bootstrap
     volumes:
@@ -248,7 +255,7 @@ services:
     environment:
       POSTGRES_DB: funchole
       POSTGRES_USER: funchole
-      POSTGRES_PASSWORD: funchole
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your .env file (see .env.example)}
     ports:
       - "5432:5432"
     volumes:

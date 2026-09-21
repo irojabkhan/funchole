@@ -95,15 +95,35 @@ if ! printf '%s' "$mounts_json" | tr -d '\n' | grep -q '"secret/"'; then
     "$BAO_ADDR/v1/sys/mounts/secret" >/dev/null
 fi
 
+# Fall back to the same literal values docker-compose.dev.yml has always
+# used when these aren't set, so local development needs no .env file at
+# all. docker-compose.yml (production) sets all four as required variables
+# (see x-app-secrets-env), so these fallbacks are never reached there.
+DB_PASSWORD_VALUE="${DB_PASSWORD:-funchole}"
+JWT_SECRET_VALUE="${JWT_SECRET:-ZGV2LXNlY3JldC1mb3ItZnVuY2hvbGUtYmFja2VuZC1jaGFuZ2UtbWUtYmVmb3JlLXByb2QteHl6MTIzNDU2Nzg5MDEyMw==}"
+BOOTSTRAP_USERNAME_VALUE="${BOOTSTRAP_USERNAME:-admin}"
+BOOTSTRAP_PASSWORD_VALUE="${BOOTSTRAP_PASSWORD:-admin12345}"
+
+render_secret_file() {
+  # "|" delimiter because JWT_SECRET/DB_PASSWORD are expected to be
+  # base64/alnum values that may contain "/" but never "|".
+  sed \
+    -e "s|__DB_PASSWORD__|${DB_PASSWORD_VALUE}|g" \
+    -e "s|__JWT_SECRET__|${JWT_SECRET_VALUE}|g" \
+    -e "s|__BOOTSTRAP_USERNAME__|${BOOTSTRAP_USERNAME_VALUE}|g" \
+    -e "s|__BOOTSTRAP_PASSWORD__|${BOOTSTRAP_PASSWORD_VALUE}|g" \
+    "$1"
+}
+
 find /secrets -type f -name '*.json' | sort | while read -r file; do
   relative_path="${file#/secrets/}"
   secret_path="${relative_path%.json}"
 
-  curl -fsS \
+  render_secret_file "$file" | curl -fsS \
     -H "X-Vault-Token: $BAO_TOKEN" \
     -H "Content-Type: application/json" \
     -X POST \
-    --data @"$file" \
+    --data-binary @- \
     "$BAO_ADDR/v1/secret/data/$secret_path" >/dev/null
 done
 
