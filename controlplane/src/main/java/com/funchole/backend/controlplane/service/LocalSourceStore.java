@@ -11,16 +11,19 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.stereotype.Component;
 
 /**
- * First {@link SourceStore} implementation: files live under
+ * Default {@link SourceStore} implementation: files live under
  * {@code <storageRoot>/<functionVersionId>/<relativePath>} on local disk.
  * Each {@link #save} replaces the FunctionVersion's directory wholesale, so a
  * resubmission can never leave a stale file behind from a previous
  * submission.
+ *
+ * <p>Simple and dependency-free, but not durable across a container being
+ * recreated unless {@code storageRoot} is a persistent volume - see
+ * {@link S3SourceStore} for a durable alternative, selected via
+ * {@code SourceStoreConfig}.
  */
-@Component
 public class LocalSourceStore implements SourceStore {
 
     private final Path storageRoot;

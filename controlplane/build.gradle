@@ -51,6 +51,11 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-database-postgresql'
+    // S3SourceStore - reuses the same S3-compatible store/credentials as
+    // artifacts (app.artifact.*), just a different key prefix, so
+    // production source storage doesn't have to live on ephemeral local
+    // disk. See SourceStoreConfig.
+    implementation 'software.amazon.awssdk:s3'
     implementation "dnsjava:dnsjava:${dnsjavaVersion}"
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"

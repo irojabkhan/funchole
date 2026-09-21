@@ -42,7 +42,10 @@ services:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/controlplane-token
       NATS_URL: nats://nats:4222
-      SOURCE_STORAGE_ROOT: /var/lib/funchole/sources
+      # Submitted Function source is stored in the same S3-compatible
+      # bucket as build artifacts (app.artifact.* / S3_ARTIFACT_* above),
+      # not on this container's own ephemeral disk - see S3SourceStore.
+      SOURCE_STORE_TYPE: s3
       # Defaults to a self-signed cert. Set CERTIFICATE_PROVIDER=LETS_ENCRYPT
       # in .env once a real domain's DNS points at this host - the gateway
       # also needs its port 80 reachable from the internet for the HTTP-01
@@ -58,7 +61,6 @@ services:
       - "7080:7080"
     volumes:
       - openbao-data:/openbao:ro
-      - controlplane-sources:/var/lib/funchole/sources
     logging: *default-logging
     networks:
       - funchole-network
@@ -324,7 +326,6 @@ volumes:
   nats-data:
   rustfs-data:
   runtime-sockets:
-  controlplane-sources:
 
 networks:
   funchole-network:

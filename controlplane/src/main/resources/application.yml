@@ -83,6 +83,11 @@ app:
     url: ${NATS_URL:nats://localhost:4222}
   source:
     storage-root: ${SOURCE_STORAGE_ROOT:/tmp/funchole-sources}
+    # 'local' (default) stores source on the storage-root path above -
+    # durable only if that path is a persistent volume. 's3' stores it in
+    # the same S3-compatible bucket already used for build artifacts
+    # (app.artifact.* below) instead - see S3SourceStore.
+    store-type: ${SOURCE_STORE_TYPE:local}
   artifact:
     endpoint: ${S3_ARTIFACT_ENDPOINT:http://localhost:9000}
     bucket: ${S3_ARTIFACT_BUCKET:funchole-artifacts}

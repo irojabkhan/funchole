@@ -19,7 +19,7 @@ class LocalSourceStoreTests {
 
     @Test
     void savesAndLoadsFilesRoundTrip() {
-        LocalSourceStore store = new LocalSourceStore(new SourceStorageProperties(storageRoot.toString()));
+        LocalSourceStore store = new LocalSourceStore(new SourceStorageProperties(storageRoot.toString(), "local"));
         UUID versionId = UUID.randomUUID();
 
         store.save(versionId, List.of(new SourceFile("index.mjs", "content-a"), new SourceFile("package.json", "content-b")));
@@ -32,7 +32,7 @@ class LocalSourceStoreTests {
 
     @Test
     void loadingAFileMissingFromDiskFailsWithAClearResourceNotFoundExceptionInsteadOfAnOpaqueIOError() {
-        LocalSourceStore store = new LocalSourceStore(new SourceStorageProperties(storageRoot.toString()));
+        LocalSourceStore store = new LocalSourceStore(new SourceStorageProperties(storageRoot.toString(), "local"));
         UUID versionId = UUID.randomUUID();
         store.save(versionId, List.of(new SourceFile("index.mjs", "content")));
 

@@ -6,5 +6,8 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @ConfigurationProperties(prefix = "app.source")
-public record SourceStorageProperties(@NotBlank String storageRoot) {
+public record SourceStorageProperties(
+        @NotBlank String storageRoot,
+        @NotBlank String storeType
+) {
 }

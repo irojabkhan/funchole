@@ -37,7 +37,8 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `SERVER_PORT` | `7080` | HTTP listen port |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | allowed CORS origins |
 | `NATS_URL` | `nats://localhost:4222` | NATS broker URL |
-| `SOURCE_STORAGE_ROOT` | `/tmp/funchole-sources` | on-disk Function source storage root - mount a persistent volume here in production (already done in `docker-compose.yml`) |
+| `SOURCE_STORAGE_ROOT` | `/tmp/funchole-sources` | on-disk Function source storage root, only used when `SOURCE_STORE_TYPE=local` |
+| `SOURCE_STORE_TYPE` | `local` | `local` (ephemeral unless `SOURCE_STORAGE_ROOT` is a persistent volume) or `s3` (durable - stores source in the same S3-compatible bucket as build artifacts, reusing the `S3_ARTIFACT_*` credentials below; `docker-compose.yml` sets this to `s3` for production) |
 | `S3_ARTIFACT_ENDPOINT` | `http://localhost:9000` | S3-compatible artifact store endpoint |
 | `S3_ARTIFACT_BUCKET` | `funchole-artifacts` | artifact bucket name |
 | `S3_ARTIFACT_ACCESS_KEY` | `funchole` | S3 access key |

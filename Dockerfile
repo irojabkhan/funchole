@@ -58,7 +58,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-FROM runtime-base AS controlplane
+FROM runtime-node-base AS controlplane
 COPY --from=build-controlplane /workspace/controlplane/build/libs/funchole-controlplane.jar app.jar
 COPY docker/controlplane-entrypoint.sh /opt/funchole/entrypoint.sh
 RUN chmod +x /opt/funchole/entrypoint.sh
