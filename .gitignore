@@ -13,5 +13,6 @@ scripts/dev/*
 !scripts/dev/seed-orders-demo.sh
 CURRENT_PROJECT_STATE.md
 FUNCHole_MASTER_PRD_AND_BACKLOG.md
+PRODUCTION_DEPLOYMENT_MISSING.md
 .atlas/
 node_modules/

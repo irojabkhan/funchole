@@ -3,10 +3,13 @@ WORKDIR /workspace
 
 COPY gradlew gradlew.bat settings.gradle build.gradle gradle.properties /workspace/
 COPY gradle /workspace/gradle
+COPY certificate/build.gradle /workspace/certificate/build.gradle
 COPY core/build.gradle /workspace/core/build.gradle
 COPY controlplane/build.gradle /workspace/controlplane/build.gradle
 COPY gateway/build.gradle /workspace/gateway/build.gradle
 COPY invocation/build.gradle /workspace/invocation/build.gradle
+COPY invocation-contract/build.gradle /workspace/invocation-contract/build.gradle
+COPY artifact/build.gradle /workspace/artifact/build.gradle
 COPY runtime-registry/build.gradle /workspace/runtime-registry/build.gradle
 COPY dispatcher/build.gradle /workspace/dispatcher/build.gradle
 COPY runtime/build.gradle /workspace/runtime/build.gradle
@@ -14,10 +17,13 @@ RUN chmod +x gradlew
 RUN --mount=type=cache,target=/root/.gradle \
     ./gradlew :controlplane:dependencies :gateway:dependencies :dispatcher:dependencies :runtime:dependencies --no-daemon >/dev/null 2>&1 || true
 
+COPY certificate/src /workspace/certificate/src
 COPY core/src /workspace/core/src
 COPY controlplane/src /workspace/controlplane/src
 COPY gateway/src /workspace/gateway/src
 COPY invocation/src /workspace/invocation/src
+COPY invocation-contract/src /workspace/invocation-contract/src
+COPY artifact/src /workspace/artifact/src
 COPY runtime-registry/src /workspace/runtime-registry/src
 COPY dispatcher/src /workspace/dispatcher/src
 COPY runtime/src /workspace/runtime/src
@@ -80,6 +86,11 @@ COPY runtime/artifacts /app/artifacts
 ENV NODE_EXECUTOR_SCRIPT_PATH=/app/node/executor.mjs
 ENV ARTIFACT_DIR=/app/artifacts/dev
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+
+FROM debian:13-slim AS rustfs-init
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends awscli ca-certificates gzip tar \
+    && rm -rf /var/lib/apt/lists/*
 
 FROM node:22-alpine AS build-web
 WORKDIR /workspace/web
@@ -151,7 +162,4 @@ FROM dev-base-common AS dev-runtime
 COPY docker/runtime-dev-entrypoint.sh /opt/funchole/runtime-dev-entrypoint.sh
 RUN chmod +x /opt/funchole/runtime-dev-entrypoint.sh
 
-FROM debian:13-slim AS dev-rustfs-init
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends awscli ca-certificates gzip tar \
-    && rm -rf /var/lib/apt/lists/*
+FROM rustfs-init AS dev-rustfs-init

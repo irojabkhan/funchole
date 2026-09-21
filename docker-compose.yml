@@ -1,3 +1,11 @@
+x-s3-artifact-env: &s3-artifact-env
+  S3_ARTIFACT_ENDPOINT: http://rustfs:9000
+  S3_ARTIFACT_BUCKET: ${S3_ARTIFACT_BUCKET:-funchole-artifacts}
+  S3_ARTIFACT_ACCESS_KEY: ${S3_ARTIFACT_ACCESS_KEY:?Set S3_ARTIFACT_ACCESS_KEY in your .env file (see .env.example)}
+  S3_ARTIFACT_SECRET_KEY: ${S3_ARTIFACT_SECRET_KEY:?Set S3_ARTIFACT_SECRET_KEY in your .env file (see .env.example)}
+  S3_ARTIFACT_REGION: ${S3_ARTIFACT_REGION:-us-east-1}
+  S3_ARTIFACT_PATH_STYLE_ACCESS: "true"
+
 services:
   controlplane:
     build:
@@ -9,9 +17,16 @@ services:
         condition: service_healthy
       openbao-init:
         condition: service_completed_successfully
+      nats:
+        condition: service_started
+      rustfs-init:
+        condition: service_completed_successfully
     environment:
+      <<: *s3-artifact-env
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/root-token
+      NATS_URL: nats://nats:4222
+      SOURCE_STORAGE_ROOT: /var/lib/funchole/sources
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s
@@ -22,6 +37,7 @@ services:
       - "7080:7080"
     volumes:
       - openbao-data:/openbao:ro
+      - controlplane-sources:/var/lib/funchole/sources
     networks:
       - funchole-network
 
@@ -39,10 +55,19 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      rustfs-init:
+        condition: service_completed_successfully
     environment:
+      <<: *s3-artifact-env
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       NATS_URL: nats://nats:4222
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS https://127.0.0.1:443/health >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
     ports:
       - "443:443"
     volumes:
@@ -64,6 +89,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      runtime:
+        condition: service_started
     environment:
       NATS_URL: nats://nats:4222
       BAO_ADDR: http://openbao:8200
@@ -71,14 +98,44 @@ services:
       DB_URL: jdbc:postgresql://db:5432/funchole
       DB_USERNAME: funchole
       DB_PASSWORD: funchole
+      DEV_RUNTIME_INSTANCE_ID: runtime-node-1
+      DEV_RUNTIME_TYPE: NODE
+      DEV_RUNTIME_SOCKET_PATH: /tmp/funchole/runtime-node-1.sock
     volumes:
       - openbao-data:/openbao:ro
+      - runtime-sockets:/tmp/funchole
+    networks:
+      - funchole-network
+
+  runtime:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-worker
+    depends_on:
+      rustfs-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *s3-artifact-env
+      RUNTIME_INSTANCE_ID: runtime-node-1
+      RUNTIME_TYPE: NODE
+      RUNTIME_WORKER_SOCKET_PATH: /tmp/funchole/runtime-node-1.sock
+      ARTIFACT_STORE_TYPE: s3
+      ARTIFACT_CACHE_DIR: /tmp/funchole/artifact-cache
+    volumes:
+      - runtime-sockets:/tmp/funchole
     networks:
       - funchole-network
 
   nats:
     image: nats:2.14.6-alpine
     command: ["-js", "-sd", "/data/jetstream", "-m", "8222"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     ports:
       - "4222:4222"
       - "8222:8222"
@@ -118,6 +175,12 @@ services:
         condition: service_healthy
     environment:
       NEXT_PUBLIC_CONTROLPLANE_URL: http://localhost:7080
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
     ports:
       - "3000:3000"
     networks:
@@ -136,6 +199,47 @@ services:
       - ./docker/openbao-init/secrets:/secrets:ro
       - openbao-data:/openbao
     entrypoint: ["/bin/sh", "/init-openbao.sh"]
+    networks:
+      - funchole-network
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: ${S3_ARTIFACT_ACCESS_KEY:?Set S3_ARTIFACT_ACCESS_KEY in your .env file (see .env.example)}
+      RUSTFS_SECRET_KEY: ${S3_ARTIFACT_SECRET_KEY:?Set S3_ARTIFACT_SECRET_KEY in your .env file (see .env.example)}
+    volumes:
+      - rustfs-data:/data
+    networks:
+      - funchole-network
+
+  rustfs-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: rustfs-init
+    depends_on:
+      rustfs:
+        condition: service_started
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ARTIFACT_ACCESS_KEY:?Set S3_ARTIFACT_ACCESS_KEY in your .env file (see .env.example)}
+      AWS_SECRET_ACCESS_KEY: ${S3_ARTIFACT_SECRET_KEY:?Set S3_ARTIFACT_SECRET_KEY in your .env file (see .env.example)}
+      AWS_DEFAULT_REGION: ${S3_ARTIFACT_REGION:-us-east-1}
+      S3_ARTIFACT_BUCKET: ${S3_ARTIFACT_BUCKET:-funchole-artifacts}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+
+        until aws --endpoint-url http://rustfs:9000 s3 ls >/dev/null 2>&1; do
+          echo "Waiting for RustFS..."
+          sleep 1
+        done
+
+        aws --endpoint-url http://rustfs:9000 s3 mb "s3://$$S3_ARTIFACT_BUCKET" >/dev/null 2>&1 || true
     networks:
       - funchole-network
 
@@ -161,6 +265,9 @@ volumes:
   postgres-data:
   openbao-data:
   nats-data:
+  rustfs-data:
+  runtime-sockets:
+  controlplane-sources:
 
 networks:
   funchole-network:
