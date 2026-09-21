@@ -127,4 +127,62 @@ find /secrets -type f -name '*.json' | sort | while read -r file; do
     "$BAO_ADDR/v1/secret/data/$secret_path" >/dev/null
 done
 
+# Least-privilege tokens for each service, instead of every container
+# holding the OpenBao root token. Each service's own secret documents/paths
+# are exactly what its code actually reads/writes - see PRODUCTION_
+# DEPLOYMENT_MISSING.md section 4 for the reasoning. Policies are rewritten
+# (idempotent) on every run; tokens are freshly minted every run (not
+# idempotent - OpenBao's token/create always returns a new token), which is
+# fine here since each service only ever reads its token file at its own
+# startup, right after this container finishes.
+create_policy() {
+  policy_name="$1"
+  policy_hcl="$2"
+  policy_json="$(printf '%s' "$policy_hcl" | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}')"
+
+  curl -fsS \
+    -X PUT \
+    -H "X-Vault-Token: $BAO_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data "{\"policy\":\"${policy_json}\"}" \
+    "$BAO_ADDR/v1/sys/policies/acl/$policy_name" >/dev/null
+}
+
+create_scoped_token() {
+  policy_name="$1"
+  output_file="$2"
+
+  token_json="$(curl -fsS \
+    -X POST \
+    -H "X-Vault-Token: $BAO_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data "{\"policies\":[\"${policy_name}\"],\"no_default_policy\":true,\"renewable\":false,\"ttl\":\"87600h\"}" \
+    "$BAO_ADDR/v1/auth/token/create")"
+
+  json_string_field client_token "$token_json" > "$output_file"
+  chmod 600 "$output_file"
+}
+
+create_policy "controlplane" '
+path "secret/data/controlplane/app" { capabilities = ["read"] }
+path "secret/data/certificates/*" { capabilities = ["create", "read", "update"] }
+path "secret/data/acme/*" { capabilities = ["create", "read", "update"] }
+path "secret/data/function-versions/*" { capabilities = ["create", "read", "update"] }
+path "secret/data/environments/*" { capabilities = ["create", "read", "update"] }
+path "secret/data/databases/*" { capabilities = ["create", "read", "update"] }
+'
+create_policy "gateway" '
+path "secret/data/gateway/app" { capabilities = ["read"] }
+path "secret/data/certificates/*" { capabilities = ["read"] }
+'
+create_policy "dispatcher" '
+path "secret/data/function-versions/*" { capabilities = ["read"] }
+path "secret/data/environments/*" { capabilities = ["read"] }
+path "secret/data/databases/*" { capabilities = ["read"] }
+'
+
+create_scoped_token "controlplane" "${OPENBAO_STATE_DIR}/controlplane-token"
+create_scoped_token "gateway" "${OPENBAO_STATE_DIR}/gateway-token"
+create_scoped_token "dispatcher" "${OPENBAO_STATE_DIR}/dispatcher-token"
+
 echo "OpenBao secrets initialized"

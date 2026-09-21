@@ -30,7 +30,7 @@ services:
     environment:
       <<: *s3-artifact-env
       BAO_ADDR: http://openbao:8200
-      BAO_TOKEN_FILE: /openbao/bootstrap/root-token
+      BAO_TOKEN_FILE: /openbao/bootstrap/controlplane-token
       NATS_URL: nats://nats:4222
       SOURCE_STORAGE_ROOT: /var/lib/funchole/sources
       # Defaults to a self-signed cert. Set CERTIFICATE_PROVIDER=LETS_ENCRYPT
@@ -71,7 +71,7 @@ services:
     environment:
       <<: *s3-artifact-env
       BAO_ADDR: http://openbao:8200
-      BAO_TOKEN_FILE: /openbao/bootstrap/root-token
+      BAO_TOKEN_FILE: /openbao/bootstrap/gateway-token
       NATS_URL: nats://nats:4222
     healthcheck:
       test: ["CMD-SHELL", "curl -kfsS https://127.0.0.1:443/health >/dev/null 2>&1"]
@@ -106,7 +106,7 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       BAO_ADDR: http://openbao:8200
-      BAO_TOKEN_FILE: /openbao/bootstrap/root-token
+      BAO_TOKEN_FILE: /openbao/bootstrap/dispatcher-token
       DB_URL: jdbc:postgresql://db:5432/funchole
       DB_USERNAME: funchole
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your .env file (see .env.example)}
@@ -148,9 +148,9 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
-    ports:
-      - "4222:4222"
-      - "8222:8222"
+    # No host ports published - only controlplane/gateway/dispatcher need to
+    # reach NATS, and they do so over the internal funchole-network. Use
+    # `docker exec` or an SSH tunnel if you need to reach it from the host.
     volumes:
       - nats-data:/data
     networks:
@@ -169,8 +169,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
-    ports:
-      - "8200:8200"
+    # No host port published - OpenBao holds every other service's secrets,
+    # so it should only ever be reachable from inside the docker network.
+    # Use `docker exec` or an SSH tunnel if you need the UI/API from the host.
     volumes:
       - openbao-data:/openbao
       - ./docker/openbao/local.hcl:/etc/openbao/local.hcl:ro
@@ -262,8 +263,9 @@ services:
       POSTGRES_DB: funchole
       POSTGRES_USER: funchole
       POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in your .env file (see .env.example)}
-    ports:
-      - "5432:5432"
+    # No host port published - only the app services need to reach Postgres,
+    # over the internal funchole-network. Use `docker exec` or an SSH tunnel
+    # if you need a direct psql client connection from the host.
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
