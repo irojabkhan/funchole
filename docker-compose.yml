@@ -12,6 +12,16 @@ x-app-secrets-env: &app-secrets-env
   BOOTSTRAP_USERNAME: ${BOOTSTRAP_USERNAME:?Set BOOTSTRAP_USERNAME in your .env file (see .env.example)}
   BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:?Set BOOTSTRAP_PASSWORD in your .env file (see .env.example)}
 
+# Every service gets this - without it, Docker's default json-file log
+# driver grows unbounded, which will eventually fill the disk on a VPS with
+# nothing else rotating logs. 10MB x 3 files per service is enough for
+# recent history/debugging without needing a separate log-shipping stack.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   controlplane:
     build:
@@ -49,6 +59,7 @@ services:
     volumes:
       - openbao-data:/openbao:ro
       - controlplane-sources:/var/lib/funchole/sources
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -84,6 +95,7 @@ services:
       - "80:80"
     volumes:
       - openbao-data:/openbao:ro
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -113,9 +125,19 @@ services:
       DEV_RUNTIME_INSTANCE_ID: runtime-node-1
       DEV_RUNTIME_TYPE: NODE
       DEV_RUNTIME_SOCKET_PATH: /tmp/funchole/runtime-node-1.sock
+    healthcheck:
+      # No HTTP listener exists here to poll - dispatcher touches this file
+      # once per poll cycle instead (see DispatcherMain), so a hung/
+      # deadlocked loop (still a "running" process) is still detected.
+      test: ["CMD-SHELL", "find /tmp/funchole/dispatcher-heartbeat -mmin -1 | grep -q ."]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     volumes:
       - openbao-data:/openbao:ro
       - runtime-sockets:/tmp/funchole
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -134,8 +156,18 @@ services:
       RUNTIME_WORKER_SOCKET_PATH: /tmp/funchole/runtime-node-1.sock
       ARTIFACT_STORE_TYPE: s3
       ARTIFACT_CACHE_DIR: /tmp/funchole/artifact-cache
+    healthcheck:
+      # Same reasoning as dispatcher's - no HTTP listener here either, only
+      # a Unix-socket IPC server, so RuntimeWorkerMain writes this file on a
+      # fixed interval independent of any actual invocation traffic.
+      test: ["CMD-SHELL", "find /tmp/funchole/runtime-heartbeat -mmin -1 | grep -q ."]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     volumes:
       - runtime-sockets:/tmp/funchole
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -153,6 +185,7 @@ services:
     # `docker exec` or an SSH tunnel if you need to reach it from the host.
     volumes:
       - nats-data:/data
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -175,6 +208,7 @@ services:
     volumes:
       - openbao-data:/openbao
       - ./docker/openbao/local.hcl:/etc/openbao/local.hcl:ro
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -196,6 +230,7 @@ services:
       start_period: 15s
     ports:
       - "3000:3000"
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -213,6 +248,7 @@ services:
       - ./docker/openbao-init/secrets:/secrets:ro
       - openbao-data:/openbao
     entrypoint: ["/bin/sh", "/init-openbao.sh"]
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -227,6 +263,7 @@ services:
       RUSTFS_SECRET_KEY: ${S3_ARTIFACT_SECRET_KEY:?Set S3_ARTIFACT_SECRET_KEY in your .env file (see .env.example)}
     volumes:
       - rustfs-data:/data
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -254,6 +291,7 @@ services:
         done
 
         aws --endpoint-url http://rustfs:9000 s3 mb "s3://$$S3_ARTIFACT_BUCKET" >/dev/null 2>&1 || true
+    logging: *default-logging
     networks:
       - funchole-network
 
@@ -273,6 +311,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    logging: *default-logging
     networks:
       - funchole-network
 

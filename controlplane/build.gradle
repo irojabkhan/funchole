@@ -39,6 +39,11 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
 
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // management.endpoints.web.exposure.include already lists "prometheus"
+    // (see application.yml), but that endpoint does nothing without an
+    // actual Micrometer registry implementation on the classpath - it was
+    // exposed but non-functional before this.
+    implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-log4j2'
     implementation 'org.springframework.boot:spring-boot-starter-security'

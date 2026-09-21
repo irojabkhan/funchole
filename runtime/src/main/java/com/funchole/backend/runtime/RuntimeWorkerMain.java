@@ -5,9 +5,15 @@ import com.funchole.backend.artifact.LocalArtifactStore;
 import com.funchole.backend.artifact.RemoteArtifactStore;
 import com.funchole.backend.artifact.S3ArtifactStore;
 import com.funchole.backend.artifact.S3ArtifactStoreConfig;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,13 +45,36 @@ public final class RuntimeWorkerMain {
         );
         server.start();
 
+        // No HTTP listener exists on this service to give a container
+        // healthcheck something to poll (it only speaks the IPC protocol
+        // over socketPath), so touch a file on a fixed interval instead - a
+        // hung/deadlocked JVM (still technically "running" as a process)
+        // stops updating it, giving an orchestrator a real liveness signal.
+        Path heartbeatFile = Path.of(readString("RUNTIME_HEARTBEAT_FILE", "/tmp/funchole/runtime-heartbeat"));
+        ScheduledExecutorService heartbeatExecutor = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "runtime-heartbeat");
+            thread.setDaemon(true);
+            return thread;
+        });
+        heartbeatExecutor.scheduleAtFixedRate(() -> writeHeartbeat(heartbeatFile), 0, 5, TimeUnit.SECONDS);
+
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            heartbeatExecutor.shutdownNow();
             server.close();
             nodeExecutor.close();
         }));
 
         logger.info("Runtime worker running. Press Ctrl+C to stop.");
         new CountDownLatch(1).await();
+    }
+
+    private static void writeHeartbeat(Path heartbeatFile) {
+        try {
+            Files.createDirectories(heartbeatFile.getParent());
+            Files.writeString(heartbeatFile, Instant.now().toString());
+        } catch (IOException exception) {
+            logger.warn("Failed to write runtime worker heartbeat file {}", heartbeatFile, exception);
+        }
     }
 
     private static ArtifactStore createArtifactStore(

@@ -8,6 +8,7 @@ import com.funchole.backend.gateway.acme.AcmeChallengeLookup;
 import com.funchole.backend.gateway.acme.AcmeChallengeServer;
 import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.SnapshotFlowResolver;
+import com.funchole.backend.gateway.server.GatewayHealthChecker;
 import com.funchole.backend.gateway.server.GatewayHttpHandler;
 import com.funchole.backend.gateway.server.GatewayInvocationCompletionListener;
 import com.funchole.backend.gateway.server.GatewayServer;
@@ -73,7 +74,8 @@ public final class GatewayMain {
                 invocationRegistry,
                 pendingResponseRegistry,
                 invocationExecutor,
-                staticSiteCache
+                staticSiteCache,
+                new GatewayHealthChecker(dataSource, natsConnection)
         );
         GatewayServer gatewayServer = new GatewayServer(port, gatewayRegistry, gatewayHttpHandler);
         AcmeChallengeServer acmeChallengeServer = new AcmeChallengeServer(

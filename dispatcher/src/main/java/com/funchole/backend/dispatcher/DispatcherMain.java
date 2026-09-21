@@ -12,7 +12,11 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,8 +70,27 @@ public final class DispatcherMain {
                 InvocationMessagingConfig.DISPATCHER_DURABLE
         );
 
+        Path heartbeatFile = Path.of(readString("DISPATCHER_HEARTBEAT_FILE", "/tmp/funchole/dispatcher-heartbeat"));
         while (!Thread.currentThread().isInterrupted()) {
+            writeHeartbeat(heartbeatFile);
             dispatcher.processNext(pollTimeout);
+        }
+    }
+
+    /**
+     * Dispatcher has no HTTP listener, so a container healthcheck can't poll
+     * an endpoint the way gateway/controlplane's do. Touching this file once
+     * per poll cycle gives an orchestrator a liveness signal instead - a
+     * stuck/deadlocked loop stops updating it, even though the process
+     * itself is still technically running. Best-effort: a failure to write
+     * it should never crash the dispatch loop itself.
+     */
+    private static void writeHeartbeat(Path heartbeatFile) {
+        try {
+            Files.createDirectories(heartbeatFile.getParent());
+            Files.writeString(heartbeatFile, Instant.now().toString());
+        } catch (IOException exception) {
+            logger.warn("Failed to write dispatcher heartbeat file {}", heartbeatFile, exception);
         }
     }
 

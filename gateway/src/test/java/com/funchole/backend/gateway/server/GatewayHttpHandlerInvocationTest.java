@@ -287,7 +287,7 @@ class GatewayHttpHandlerInvocationTest {
                 Map.of(gateway.hostname(), gateway), null, Map.of()));
         GatewayHttpHandler handler =
                 new GatewayHttpHandler(
-                        OBJECT_MAPPER, registry, flowResolver, invocationRegistry, pendingRegistry, invocationExecutor, null);
+                        OBJECT_MAPPER, registry, flowResolver, invocationRegistry, pendingRegistry, invocationExecutor, null, null);
         return new EmbeddedChannel(handler);
     }
 

@@ -32,6 +32,7 @@ import com.funchole.backend.gateway.GatewayRegistry;
 import com.funchole.backend.gateway.GatewayRegistryLoader;
 import com.funchole.backend.gateway.GatewayRegistrySnapshot;
 import com.funchole.backend.gateway.flow.SnapshotFlowResolver;
+import com.funchole.backend.gateway.server.GatewayHealthChecker;
 import com.funchole.backend.gateway.server.GatewayHttpHandler;
 import com.funchole.backend.gateway.server.GatewayInvocationCompletionListener;
 import com.funchole.backend.gateway.server.GatewayServer;
@@ -248,7 +249,8 @@ class ZeroToHttpResponseE2ETest {
                 gatewayInvocationRegistry,
                 pendingResponseRegistry,
                 Executors.newFixedThreadPool(2),
-                null
+                null,
+                new GatewayHealthChecker(infraDataSource, natsConnection)
         );
         gatewayServer = new GatewayServer(0, gatewayRegistry, gatewayHttpHandler);
         gatewayServer.start();

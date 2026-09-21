@@ -50,6 +50,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
     private final PendingInvocationResponseRegistry pendingResponseRegistry;
     private final ExecutorService invocationExecutor;
     private final StaticSiteCache staticSiteCache;
+    private final GatewayHealthChecker healthChecker;
 
     public GatewayHttpHandler(
             ObjectMapper objectMapper,
@@ -58,7 +59,8 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
             InvocationRegistry invocationRegistry,
             PendingInvocationResponseRegistry pendingResponseRegistry,
             ExecutorService invocationExecutor,
-            StaticSiteCache staticSiteCache
+            StaticSiteCache staticSiteCache,
+            GatewayHealthChecker healthChecker
     ) {
         this.objectMapper = objectMapper;
         this.gatewayRegistry = gatewayRegistry;
@@ -67,6 +69,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         this.pendingResponseRegistry = pendingResponseRegistry;
         this.invocationExecutor = invocationExecutor;
         this.staticSiteCache = staticSiteCache;
+        this.healthChecker = healthChecker;
     }
 
     @Override
@@ -80,12 +83,15 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         );
 
         if ("/health".equals(requestContext.path())) {
-            writeJson(context, HttpResponseStatus.OK, Map.of(
-                    "success", true,
+            GatewayHealthChecker.Status status = healthChecker.check();
+            writeJson(context, status.healthy() ? HttpResponseStatus.OK : HttpResponseStatus.SERVICE_UNAVAILABLE, Map.of(
+                    "success", status.healthy(),
                     "service", "gateway",
                     "transport", "raw-netty",
                     "protocol", "https",
-                    "status", "ok",
+                    "status", status.healthy() ? "ok" : "degraded",
+                    "databaseHealthy", status.databaseHealthy(),
+                    "natsHealthy", status.natsHealthy(),
                     "registeredGateways", gatewayRegistry.entries().size()
             ));
             return;
