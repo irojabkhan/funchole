@@ -12,6 +12,7 @@ import com.funchole.backend.controlplane.entity.Gateway;
 import com.funchole.backend.controlplane.entity.GatewayCertificate;
 import com.funchole.backend.controlplane.event.GatewayCertificateProvisionRequested;
 import com.funchole.backend.controlplane.repository.GatewayCertificateRepository;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -89,6 +90,25 @@ public class GatewayCertificateService {
         );
 
         for (GatewayCertificate certificate : certificates) {
+            provisionCertificate(certificate.getId());
+        }
+    }
+
+    @Scheduled(fixedDelayString = "${app.certificate.retry-delay-ms:60000}", initialDelayString = "${app.certificate.retry-delay-ms:60000}")
+    public void renewExpiringCertificates() {
+        OffsetDateTime renewalThreshold = OffsetDateTime.now().plusDays(certificateProperties.renewalWindowDays());
+        List<GatewayCertificate> certificates = gatewayCertificateRepository.findByStatusAndExpiresAtBefore(
+                CertificateStatus.ACTIVE, renewalThreshold
+        );
+
+        for (GatewayCertificate certificate : certificates) {
+            logger.info(
+                    "Certificate for gateway {} hostname {} expires at {}, within the {}-day renewal window; renewing",
+                    certificate.getGateway().getId(),
+                    certificate.getHostname(),
+                    certificate.getExpiresAt(),
+                    certificateProperties.renewalWindowDays()
+            );
             provisionCertificate(certificate.getId());
         }
     }

@@ -2,6 +2,7 @@ package com.funchole.backend.controlplane.repository;
 
 import com.funchole.backend.certificate.CertificateStatus;
 import com.funchole.backend.controlplane.entity.GatewayCertificate;
+import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -22,4 +23,7 @@ public interface GatewayCertificateRepository extends JpaRepository<GatewayCerti
 
     @EntityGraph(attributePaths = { "gateway", "gateway.appDomain" })
     List<GatewayCertificate> findByStatus(CertificateStatus status);
+
+    @EntityGraph(attributePaths = { "gateway", "gateway.appDomain" })
+    List<GatewayCertificate> findByStatusAndExpiresAtBefore(CertificateStatus status, OffsetDateTime expiresAtBefore);
 }

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.funchole.backend.artifact.RemoteArtifactStore;
 import com.funchole.backend.artifact.S3ArtifactStore;
 import com.funchole.backend.artifact.S3ArtifactStoreConfig;
+import com.funchole.backend.gateway.acme.AcmeChallengeLookup;
+import com.funchole.backend.gateway.acme.AcmeChallengeServer;
 import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.SnapshotFlowResolver;
 import com.funchole.backend.gateway.server.GatewayHttpHandler;
@@ -74,11 +76,16 @@ public final class GatewayMain {
                 staticSiteCache
         );
         GatewayServer gatewayServer = new GatewayServer(port, gatewayRegistry, gatewayHttpHandler);
+        AcmeChallengeServer acmeChallengeServer = new AcmeChallengeServer(
+                readInt("ACME_HTTP01_PORT", 80),
+                new AcmeChallengeLookup(dataSource)
+        );
         ScheduledExecutorService registryRefreshExecutor = createRegistryRefreshExecutor();
         startRegistryPolling(gatewayRegistry, gatewayRegistryLoader, registryRefreshExecutor);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             gatewayServer.close();
+            acmeChallengeServer.close();
             completionListener.close();
             gatewayHttpHandler.close();
             registryRefreshExecutor.shutdownNow();
@@ -93,6 +100,7 @@ public final class GatewayMain {
             }
         }));
 
+        startAcmeChallengeServer(acmeChallengeServer);
         gatewayServer.start();
         gatewayServer.await();
     }
@@ -127,6 +135,24 @@ public final class GatewayMain {
         }
 
         throw new IllegalStateException("Unable to load gateway registry after " + attempts + " attempts", lastException);
+    }
+
+    /**
+     * A bind failure here (port already in use, insufficient privileges,
+     * etc.) is not allowed to take down real HTTPS traffic on 443 - most
+     * deployments (the SELF_SIGNED default) never need this listener at
+     * all, so it's logged and skipped rather than propagated.
+     */
+    private static void startAcmeChallengeServer(AcmeChallengeServer acmeChallengeServer) {
+        try {
+            acmeChallengeServer.start();
+        } catch (RuntimeException exception) {
+            logger.warn(
+                    "ACME HTTP-01 challenge server failed to start; Let's Encrypt certificate "
+                            + "issuance/renewal will fail until this is resolved. Gateway HTTPS traffic is unaffected.",
+                    exception
+            );
+        }
     }
 
     private static ScheduledExecutorService createRegistryRefreshExecutor() {

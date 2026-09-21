@@ -33,6 +33,11 @@ services:
       BAO_TOKEN_FILE: /openbao/bootstrap/root-token
       NATS_URL: nats://nats:4222
       SOURCE_STORAGE_ROOT: /var/lib/funchole/sources
+      # Defaults to a self-signed cert. Set CERTIFICATE_PROVIDER=LETS_ENCRYPT
+      # in .env once a real domain's DNS points at this host - the gateway
+      # also needs its port 80 reachable from the internet for the HTTP-01
+      # challenge (already published below).
+      CERTIFICATE_PROVIDER: ${CERTIFICATE_PROVIDER:-SELF_SIGNED}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s
@@ -76,6 +81,7 @@ services:
       start_period: 10s
     ports:
       - "443:443"
+      - "80:80"
     volumes:
       - openbao-data:/openbao:ro
     networks:

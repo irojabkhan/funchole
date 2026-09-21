@@ -94,6 +94,13 @@ app:
     provider: ${CERTIFICATE_PROVIDER:SELF_SIGNED}
     self-signed-validity-days: ${CERTIFICATE_SELF_SIGNED_VALIDITY_DAYS:30}
     retry-delay-ms: ${CERTIFICATE_RETRY_DELAY_MS:60000}
+    # Deliberately well below self-signed-validity-days' own default (30) -
+    # a renewal window equal to or larger than a cert's own validity period
+    # would make it perpetually due for renewal from the moment it's issued.
+    renewal-window-days: ${CERTIFICATE_RENEWAL_WINDOW_DAYS:10}
+    acme-server-uri: ${CERTIFICATE_ACME_SERVER_URI:https://acme-v02.api.letsencrypt.org/directory}
+    acme-poll-interval-seconds: ${CERTIFICATE_ACME_POLL_INTERVAL_SECONDS:3}
+    acme-max-poll-attempts: ${CERTIFICATE_ACME_MAX_POLL_ATTEMPTS:20}
   security:
     jwt:
       secret: ${JWT_SECRET:ZGV2LXNlY3JldC1mb3ItZnVuY2hvbGUtYmFja2VuZC1jaGFuZ2UtbWUtYmVmb3JlLXByb2QteHl6MTIzNDU2Nzg5MDEyMw==}
