@@ -13,6 +13,7 @@ import com.funchole.backend.controlplane.constant.GatewayStatus;
 import com.funchole.backend.controlplane.entity.AppDomain;
 import com.funchole.backend.controlplane.entity.AppUser;
 import com.funchole.backend.controlplane.entity.Gateway;
+import com.funchole.backend.controlplane.mcp.FunctionExampleFixtures;
 import com.funchole.backend.controlplane.repository.AppDomainRepository;
 import com.funchole.backend.controlplane.repository.AppUserRepository;
 import com.funchole.backend.controlplane.repository.GatewayRepository;
@@ -107,8 +108,10 @@ class FlowVersionInvocationIntegrationTests {
     @Test
     void invokesADraftFlowVersionWithoutRequiringAdoption() throws Exception {
         ReadyFunctionVersion checker = createReadyFunctionVersion("export async function handler(input) { return input; }");
-        ReadyFunctionVersion responder = createReadyFunctionVersion(
-                "export async function handler(input) { return { status: 200, body: { ok: true, input } }; }");
+        // Shared with get_function_example's NODE_BASIC scenario (FunctionExampleFixtures) -
+        // this assertion is that scenario's source of truth; if this source changes, this test
+        // fails, so the MCP tool's returned example can never silently drift from real behavior.
+        ReadyFunctionVersion responder = createReadyFunctionVersion(FunctionExampleFixtures.NODE_BASIC_SOURCE);
         String flowId = createFlow();
         String versionId = createDraftVersion(flowId);
         createStep(flowId, versionId, "check", "FUNCTION", 10, checker);

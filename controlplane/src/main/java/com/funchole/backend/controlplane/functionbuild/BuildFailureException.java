@@ -68,13 +68,16 @@ public abstract class BuildFailureException extends RuntimeException {
         return timedOut;
     }
 
+    private static final String EXAMPLE_TOOL_HINT =
+            " Call the MCP tool get_function_example for a known-working template for this runtime.";
+
     protected static String buildMessage(String label, UUID functionVersionId, String stage, List<String> command, Integer exitCode, boolean timedOut) {
         String commandText = String.join(" ", command);
         if (timedOut) {
             return label + " stage '" + stage + "' timed out running '" + commandText
-                    + "' for function version: " + functionVersionId;
+                    + "' for function version: " + functionVersionId + EXAMPLE_TOOL_HINT;
         }
         return label + " stage '" + stage + "' failed (exit code " + exitCode + ") running '" + commandText
-                + "' for function version: " + functionVersionId;
+                + "' for function version: " + functionVersionId + EXAMPLE_TOOL_HINT;
     }
 }

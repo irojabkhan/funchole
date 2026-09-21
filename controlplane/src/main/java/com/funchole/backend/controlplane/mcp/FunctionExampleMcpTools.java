@@ -1,0 +1,93 @@
+package com.funchole.backend.controlplane.mcp;
+
+import com.funchole.backend.controlplane.mcp.FunctionExampleFixtures.ExampleFile;
+import java.util.List;
+import java.util.Locale;
+import org.springframework.ai.mcp.annotation.McpTool;
+import org.springframework.ai.mcp.annotation.McpToolParam;
+import org.springframework.stereotype.Service;
+
+/**
+ * MCP tool surface for {@link FunctionExampleFixtures} - a backup for a stuck coding agent:
+ * copy-pasteable, known-working example source for a given scenario, instead of requiring the
+ * agent to correctly synthesize behavior from prose tool descriptions alone (see
+ * MCP_TESTING_FEEDBACK.md §8). {@link com.funchole.backend.controlplane.functionbuild.BuildFailureException}
+ * references this tool by name in every build-failure message an agent can hit, since that is
+ * the moment an agent is actually stuck and looking for a way out - not the tool list, which
+ * items 1-6 of that same feedback file showed agents don't reliably consult on their own.
+ */
+@Service
+public class FunctionExampleMcpTools {
+
+    public record FunctionExampleResponse(
+            String scenario,
+            String runtime,
+            String description,
+            String entrypoint,
+            String handler,
+            List<ExampleFile> files
+    ) {
+    }
+
+    @McpTool(
+            name = "get_function_example",
+            description = "Return real, known-working example source for a specific Function scenario - "
+                    + "copy-pasteable ground truth for submit_function_version_source, instead of guessing the "
+                    + "expected shape from prose alone. Each example's content is asserted directly by a "
+                    + "currently-passing test in this repo, so it cannot silently drift out of sync with actual "
+                    + "runtime behavior. Call this before writing a NODE RESPONSE handler, a Database-backed "
+                    + "handler, or a multi-page STATIC site for the first time - or any time a deploy fails and "
+                    + "you are not sure why, since build failure messages point back here."
+    )
+    public FunctionExampleResponse getFunctionExample(
+            @McpToolParam(description = "Which example to return: NODE_BASIC (a NODE RESPONSE step returning the "
+                    + "correct {status, body} contract and echoing its input back), NODE_DATABASE (a NODE handler "
+                    + "that creates a table, inserts a row, and reads it back via an attached Database's "
+                    + "context.db(name)), or STATIC_MULTIPAGE (a real multi-page static site's file layout, with "
+                    + "package.json build script)") String scenario
+    ) {
+        String normalized = scenario == null ? "" : scenario.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "NODE_BASIC" -> new FunctionExampleResponse(
+                    "NODE_BASIC",
+                    "NODE",
+                    "A NODE-runtime Function used as a Flow's RESPONSE step. Its handler receives the step's "
+                            + "input as its first argument and must return exactly {status, body} - the Gateway "
+                            + "reads only those two fields, always JSON-encodes body, and always sends "
+                            + "Content-Type: application/json.",
+                    FunctionExampleFixtures.NODE_BASIC_ENTRYPOINT,
+                    FunctionExampleFixtures.NODE_BASIC_HANDLER,
+                    List.of(new ExampleFile(FunctionExampleFixtures.NODE_BASIC_ENTRYPOINT, FunctionExampleFixtures.NODE_BASIC_SOURCE))
+            );
+            case "NODE_DATABASE" -> new FunctionExampleResponse(
+                    "NODE_DATABASE",
+                    "NODE",
+                    "A NODE-runtime Function that reads/writes a Database resource attached via "
+                            + "attach_function_version_database. context.db(name) returns a real node-postgres "
+                            + "(pg) Pool - call .query(sql, params) on it directly. There is no separate "
+                            + "migration/seed tool: this handler's own CREATE TABLE IF NOT EXISTS is the pattern "
+                            + "for getting an initial schema into a freshly attached Database - deploy it and "
+                            + "invoke it once.",
+                    FunctionExampleFixtures.NODE_DATABASE_ENTRYPOINT,
+                    FunctionExampleFixtures.NODE_DATABASE_HANDLER,
+                    List.of(new ExampleFile(FunctionExampleFixtures.NODE_DATABASE_ENTRYPOINT, FunctionExampleFixtures.NODE_DATABASE_SOURCE))
+            );
+            case "STATIC_MULTIPAGE" -> new FunctionExampleResponse(
+                    "STATIC_MULTIPAGE",
+                    "STATIC",
+                    "A real multi-page static site as ONE Function/FunctionVersion submission - not one Function "
+                            + "per page. index.html serves '/', about.html serves '/about', blog/index.html "
+                            + "serves '/blog', blog/first-post.html serves '/blog/first-post'. package.json's "
+                            + "\"build\" script runs for real (npm ci/install, then npm run build, always, in that "
+                            + "order) and must produce a dist/ directory with this same file layout inside it - "
+                            + "cp/mkdir in \"build\" is exactly what this example does and is fully supported, "
+                            + "nothing STATIC-specific to work around.",
+                    FunctionExampleFixtures.STATIC_ENTRYPOINT,
+                    null,
+                    FunctionExampleFixtures.staticMultipageFiles()
+            );
+            default -> throw new IllegalArgumentException(
+                    "Unknown scenario: '" + scenario + "' - expected one of NODE_BASIC, NODE_DATABASE, STATIC_MULTIPAGE");
+        };
+    }
+}
