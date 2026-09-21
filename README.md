@@ -39,7 +39,7 @@ Implemented today:
 * domain creation and TXT-based verification
 * gateway creation under verified domains
 * shared certificate module
-* self-signed certificate generation for local development
+* self-signed certificate generation for local development, real ACME/Let's Encrypt issuance and expiry-based renewal for production (HTTP-01 challenge, `CERTIFICATE_PROVIDER=LETS_ENCRYPT`)
 * OpenBao-backed secret storage for certificate material and Function/Environment secrets
 * in-memory gateway TLS + routing registry with short polling refresh
 * Gateway routing with three shapes: exact-match, `:name` path-parameter capture, and `/*` wildcard subtree
@@ -60,7 +60,7 @@ Not implemented yet:
 
 * durable/distributed runtime reservation (Runtime Registry state today is in-memory per dispatcher process only)
 * artifact/source cache eviction or TTL
-* production ACME / Let's Encrypt flow (self-signed only in local development)
+* DNS-01 ACME challenges (HTTP-01 is implemented - see `CERTIFICATE_PROVIDER=LETS_ENCRYPT` in [docs/environment-variables.md](docs/environment-variables.md) - but DNS-01 isn't, since it would mean picking a specific DNS provider's API to integrate with)
 * automatic host-machine DNS setup for custom local domains
 * a raw-body/custom-`Content-Type` response for a `NODE` Function's `RESPONSE` step - it always JSON-encodes `body` under `application/json` today, so real per-request dynamic HTML (true SSR) isn't supported yet; a static frontend should use the `STATIC` runtime instead
 * combining a `:name` path parameter with a `/*` wildcard in the same route
@@ -252,7 +252,7 @@ More setup and local workflow details live in [docs/development.md](docs/develop
 
 ## Managing FuncHole via MCP
 
-The `controlplane` module runs an MCP server at `/api/mcp` (Streamable HTTP transport) exposing the full Function/FunctionVersion/Flow/FlowVersion/Gateway/Domain/Database/Environment/Invocation lifecycle as tools - the same operations available through the REST API, reachable by an MCP-capable client (Claude Code, opencode, Puku, or any other MCP client) instead of hand-written HTTP calls.
+The `controlplane` module runs an MCP server at `/api/mcp` (Streamable HTTP transport) exposing the full Function/FunctionVersion/Flow/FlowVersion/Gateway/Domain/Database/Environment/Invocation lifecycle as tools - the same operations available through the REST API, reachable by an MCP-capable client (Claude Code, opencode, Codex CLI, Puku, or any other MCP client) instead of hand-written HTTP calls.
 
 Authenticate with a dedicated API key rather than a user's JWT:
 
@@ -267,11 +267,28 @@ curl -X POST http://localhost:7080/api/v1/api-keys \
   -d '{"name": "my-agent"}'
 ```
 
-The response's `rawKey` (prefixed `fh_mcp_...`) is shown once - use it as a bearer token when connecting an MCP client to `http://localhost:7080/api/mcp`. For example, with Claude Code:
+The response's `rawKey` (prefixed `fh_mcp_...`) is shown once - use it as a bearer token when connecting an MCP client to `http://localhost:7080/api/mcp`.
+
+**Claude Code:**
 
 ```bash
 claude mcp add --transport http funchole http://localhost:7080/api/mcp \
   --header "Authorization: Bearer <fh_mcp_...>"
+```
+
+**opencode** (note the header syntax is `NAME=VALUE`, not `NAME: VALUE`):
+
+```bash
+opencode mcp add funchole --url http://localhost:7080/api/mcp \
+  --header "Authorization=Bearer <fh_mcp_...>"
+```
+
+**Codex CLI** (reads the token from an environment variable rather than taking it inline):
+
+```bash
+export FUNCHOLE_MCP_TOKEN=<fh_mcp_...>
+codex mcp add funchole --url http://localhost:7080/api/mcp \
+  --bearer-token-env-var FUNCHOLE_MCP_TOKEN
 ```
 
 A coding agent working through these tools can create a Function, submit its source, build and deploy it, wire it into a Flow, and adopt that Flow - end to end, without touching the REST API or a terminal. `get_flow_full_source` is the most agent-friendly read: it returns a Flow's entire dependency tree (every step's Function source inlined, `SUB_FLOW` steps expanded recursively) in a single call.
@@ -283,6 +300,7 @@ Project docs:
 * [docs/architecture.md](docs/architecture.md)
 * [docs/development.md](docs/development.md)
 * [docs/environment-variables.md](docs/environment-variables.md) - every configuration knob for a production deployment
+* [docs/limitations.md](docs/limitations.md) - known limitations, including why Gateway must run as exactly one instance
 * [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Community

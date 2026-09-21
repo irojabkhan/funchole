@@ -90,6 +90,9 @@ services:
       timeout: 3s
       retries: 60
       start_period: 10s
+    # Run exactly one gateway replica - see docs/limitations.md ("Gateway is
+    # single-instance only") for why a second one would silently drop
+    # responses rather than fail over.
     ports:
       - "443:443"
       - "80:80"
