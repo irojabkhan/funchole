@@ -282,6 +282,7 @@ Project docs:
 
 * [docs/architecture.md](docs/architecture.md)
 * [docs/development.md](docs/development.md)
+* [docs/environment-variables.md](docs/environment-variables.md) - every configuration knob for a production deployment
 * [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## Community
