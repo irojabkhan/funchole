@@ -18,8 +18,21 @@ public interface RuntimeBuilder {
 
     /**
      * Builds the materialized source in {@code workspace} into a
-     * {@link PreparedArtifact}. The workspace remains owned by its caller -
-     * this method does not close it.
+     * {@link PreparedArtifact}, discarding per-stage build diagnostics
+     * (equivalent to {@link #build(BuildWorkspace, BuildLogRecorder)} with
+     * {@link BuildLogRecorder#NOOP}) - kept for callers (tests, older call
+     * sites) that don't need them persisted.
      */
-    PreparedArtifact build(BuildWorkspace workspace);
+    default PreparedArtifact build(BuildWorkspace workspace) {
+        return build(workspace, BuildLogRecorder.NOOP);
+    }
+
+    /**
+     * Builds the materialized source in {@code workspace} into a
+     * {@link PreparedArtifact}. The workspace remains owned by its caller -
+     * this method does not close it. Each build stage this runs (dependency
+     * install, bundling, ...) is reported to {@code logRecorder} as it
+     * completes, success or failure, before any failure is thrown.
+     */
+    PreparedArtifact build(BuildWorkspace workspace, BuildLogRecorder logRecorder);
 }

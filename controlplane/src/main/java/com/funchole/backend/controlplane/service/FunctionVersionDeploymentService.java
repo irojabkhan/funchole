@@ -3,6 +3,7 @@ package com.funchole.backend.controlplane.service;
 import com.funchole.backend.artifact.ArtifactPublisher;
 import com.funchole.backend.artifact.PublishedArtifact;
 import com.funchole.backend.controlplane.entity.FunctionVersion;
+import com.funchole.backend.controlplane.functionbuild.BuildLogRecorder;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspaceService;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
@@ -58,6 +59,7 @@ public class FunctionVersionDeploymentService {
     private final FunctionVersionDeploymentFinalizer deploymentFinalizer;
     private final FunctionVersionArtifactRegistry artifactRegistry;
     private final FunctionVersionLifecycleRegistry lifecycleRegistry;
+    private final FunctionVersionBuildLogService buildLogService;
 
     public FunctionVersionDeploymentService(
             BuildWorkspaceService buildWorkspaceService,
@@ -65,7 +67,8 @@ public class FunctionVersionDeploymentService {
             ArtifactPublisher artifactPublisher,
             FunctionVersionDeploymentFinalizer deploymentFinalizer,
             FunctionVersionArtifactRegistry artifactRegistry,
-            FunctionVersionLifecycleRegistry lifecycleRegistry
+            FunctionVersionLifecycleRegistry lifecycleRegistry,
+            FunctionVersionBuildLogService buildLogService
     ) {
         this.buildWorkspaceService = buildWorkspaceService;
         this.runtimeBuilderRegistry = runtimeBuilderRegistry;
@@ -73,6 +76,7 @@ public class FunctionVersionDeploymentService {
         this.deploymentFinalizer = deploymentFinalizer;
         this.artifactRegistry = artifactRegistry;
         this.lifecycleRegistry = lifecycleRegistry;
+        this.buildLogService = buildLogService;
     }
 
     public FunctionVersion deploy(UUID functionVersionId) {
@@ -97,8 +101,9 @@ public class FunctionVersionDeploymentService {
         try {
             try (BuildWorkspace workspace = buildWorkspaceService.prepareWorkspace(functionVersionId)) {
                 RuntimeBuilder runtimeBuilder = runtimeBuilderRegistry.resolve(functionVersion.getRuntime());
+                BuildLogRecorder logRecorder = buildLogService.recorderFor(functionVersionId);
 
-                try (PreparedArtifact preparedArtifact = runtimeBuilder.build(workspace)) {
+                try (PreparedArtifact preparedArtifact = runtimeBuilder.build(workspace, logRecorder)) {
                     published = artifactPublisher.publish(functionVersionId, preparedArtifact.artifactDirectory());
                 }
             }

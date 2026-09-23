@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane.mcp;
 
+import com.funchole.backend.controlplane.dto.FunctionVersionBuildLogResponse;
 import com.funchole.backend.controlplane.dto.FunctionVersionConfigResponse;
 import com.funchole.backend.controlplane.dto.FunctionVersionCreateRequest;
 import com.funchole.backend.controlplane.dto.FunctionVersionDatabaseAttachmentResponse;
@@ -8,10 +9,12 @@ import com.funchole.backend.controlplane.dto.FunctionVersionResponse;
 import com.funchole.backend.controlplane.dto.FunctionVersionSourceFileResponse;
 import com.funchole.backend.controlplane.dto.FunctionVersionSourceResponse;
 import com.funchole.backend.controlplane.entity.FunctionVersion;
+import com.funchole.backend.controlplane.entity.FunctionVersionBuildLog;
 import com.funchole.backend.controlplane.entity.FunctionVersionSource;
 import com.funchole.backend.controlplane.entity.SourceBundle;
 import com.funchole.backend.controlplane.entity.SourceFile;
 import com.funchole.backend.controlplane.mapper.FunctionVersionMapper;
+import com.funchole.backend.controlplane.service.FunctionVersionBuildLogService;
 import com.funchole.backend.controlplane.service.FunctionVersionConfigService;
 import com.funchole.backend.controlplane.service.FunctionVersionDatabaseService;
 import com.funchole.backend.controlplane.service.FunctionVersionDeploymentService;
@@ -43,6 +46,7 @@ public class FunctionVersionMcpTools {
     private final FunctionVersionDeploymentService functionVersionDeploymentService;
     private final FunctionVersionConfigService functionVersionConfigService;
     private final FunctionVersionDatabaseService functionVersionDatabaseService;
+    private final FunctionVersionBuildLogService functionVersionBuildLogService;
     private final FunctionVersionMapper functionVersionMapper;
 
     public FunctionVersionMcpTools(
@@ -51,6 +55,7 @@ public class FunctionVersionMcpTools {
             FunctionVersionDeploymentService functionVersionDeploymentService,
             FunctionVersionConfigService functionVersionConfigService,
             FunctionVersionDatabaseService functionVersionDatabaseService,
+            FunctionVersionBuildLogService functionVersionBuildLogService,
             FunctionVersionMapper functionVersionMapper
     ) {
         this.functionVersionService = functionVersionService;
@@ -58,6 +63,7 @@ public class FunctionVersionMcpTools {
         this.functionVersionDeploymentService = functionVersionDeploymentService;
         this.functionVersionConfigService = functionVersionConfigService;
         this.functionVersionDatabaseService = functionVersionDatabaseService;
+        this.functionVersionBuildLogService = functionVersionBuildLogService;
         this.functionVersionMapper = functionVersionMapper;
     }
 
@@ -185,7 +191,10 @@ public class FunctionVersionMcpTools {
     @McpTool(
             name = "deploy_function_version",
             description = "Build and deploy a DRAFT FunctionVersion that already has source submitted, moving it to "
-                    + "PUBLISHING then READY (or FAILED with build error detail)."
+                    + "PUBLISHING then READY (or FAILED with build error detail in this call's own error message). "
+                    + "That error message is the only place a failure's detail is shown live - call "
+                    + "get_function_version_build_logs afterward (any time later, not just right away) to see the "
+                    + "full stdout/stderr of every build stage that ran, persisted durably."
     )
     public FunctionVersionResponse deployFunctionVersion(
             @McpToolParam(description = "Function id (UUID)") String functionId,
@@ -195,6 +204,32 @@ public class FunctionVersionMcpTools {
         functionVersionService.getVersionById(CurrentMcpUser.id(), UUID.fromString(functionId), versionUuid);
         FunctionVersion deployed = functionVersionDeploymentService.deploy(versionUuid);
         return functionVersionMapper.toResponse(deployed);
+    }
+
+    @McpTool(
+            name = "get_function_version_build_logs",
+            description = "Read a FunctionVersion's persisted build-stage diagnostics: every dependency-install/"
+                    + "build stage a deploy attempt ran, in order, each with its exact command, exit code, and full "
+                    + "stdout/stderr - whether that stage succeeded or failed. Durable and queryable at any time "
+                    + "after deploy_function_version returns, not just in the same session as the failure. Returns "
+                    + "an empty list for a version that was never deployed, or whose runtime never needed to run a "
+                    + "build stage (e.g. a dependency-free NODE version with no package.json)."
+    )
+    public List<FunctionVersionBuildLogResponse> getFunctionVersionBuildLogs(
+            @McpToolParam(description = "Function id (UUID)") String functionId,
+            @McpToolParam(description = "FunctionVersion id (UUID)") String versionId
+    ) {
+        UUID versionUuid = UUID.fromString(versionId);
+        functionVersionService.getVersionById(CurrentMcpUser.id(), UUID.fromString(functionId), versionUuid);
+        return functionVersionBuildLogService.listLogs(versionUuid).stream()
+                .map(FunctionVersionMcpTools::toBuildLogResponse)
+                .toList();
+    }
+
+    private static FunctionVersionBuildLogResponse toBuildLogResponse(FunctionVersionBuildLog log) {
+        return new FunctionVersionBuildLogResponse(
+                log.getStage(), log.getCommand(), log.getExitCode(), log.isSucceeded(), log.isTimedOut(),
+                log.getStdout(), log.getStderr(), log.getCreatedAt());
     }
 
     @McpTool(name = "get_function_version_config", description = "Get a FunctionVersion's environment variables and secret keys (secret values are never returned, only their reference).")

@@ -20,6 +20,7 @@ import com.funchole.backend.controlplane.repository.AppUserRepository;
 import com.funchole.backend.controlplane.repository.FunctionRepository;
 import com.funchole.backend.controlplane.repository.FunctionVersionRepository;
 import com.funchole.backend.controlplane.service.FunctionVersionArtifactRegistry;
+import com.funchole.backend.controlplane.service.FunctionVersionBuildLogService;
 import com.funchole.backend.controlplane.service.FunctionVersionDeploymentFinalizer;
 import com.funchole.backend.controlplane.service.FunctionVersionDeploymentService;
 import com.funchole.backend.controlplane.service.FunctionVersionLifecycleRegistry;
@@ -83,6 +84,9 @@ class FunctionVersionDeploymentServiceTests {
 
     @Autowired
     private FunctionVersionLifecycleRegistry lifecycleRegistry;
+
+    @Autowired
+    private FunctionVersionBuildLogService buildLogService;
 
     @Test
     void newFunctionVersionStartsDraft() {
@@ -378,7 +382,7 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(new PublishedArtifact(
                 functionVersion.getId(), FunctionVersionArtifactRegistry.artifactObjectKey(functionVersion.getId()), SHA256_A, SIZE_A));
         FunctionVersionDeploymentService service = new FunctionVersionDeploymentService(
-                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry);
+                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
 
         service.deploy(functionVersion.getId());
 
@@ -463,7 +467,7 @@ class FunctionVersionDeploymentServiceTests {
         RuntimeBuilderRegistry registry = new RuntimeBuilderRegistry(List.of(RecordingRuntimeBuilder.supporting("NODE")));
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(null);
         FunctionVersionDeploymentService service = new FunctionVersionDeploymentService(
-                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry);
+                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
 
         assertThatThrownBy(() -> service.deploy(functionVersion.getId()))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -481,7 +485,7 @@ class FunctionVersionDeploymentServiceTests {
     private FunctionVersionDeploymentService service(ArtifactPublisher publisher, RuntimeBuilder runtimeBuilder) {
         return new FunctionVersionDeploymentService(
                 buildWorkspaceService, new RuntimeBuilderRegistry(List.of(runtimeBuilder)), publisher,
-                deploymentFinalizer, artifactRegistry, lifecycleRegistry);
+                deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
     }
 
     private FunctionVersion createFunctionVersion() {
@@ -635,7 +639,7 @@ class FunctionVersionDeploymentServiceTests {
         }
 
         @Override
-        public PreparedArtifact build(BuildWorkspace workspace) {
+        public PreparedArtifact build(BuildWorkspace workspace, com.funchole.backend.controlplane.functionbuild.BuildLogRecorder logRecorder) {
             receivedWorkspaces.add(workspace);
             // Captured up front - the workspace is closed by the caller as
             // soon as this method returns (or throws), so its content is not

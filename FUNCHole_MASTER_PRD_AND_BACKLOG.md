@@ -1203,21 +1203,23 @@ Parallel work is allowed only where it does not change these contracts.
 **User story:** Humans and agents can understand every build and invocation failure
 
 **Tracked features:** F246–F256  
-**Current planning score:** **22.7%**  
+**Current planning score:** **36.4%**  
 **Feature count:** 11  
-**Complete features:** 0/11
+**Complete features:** 1/11
 
 **Acceptance outcome:** All P0/P1 features in this epic are externally usable through the intended product boundary, covered by focused tests, and no seeded/manual workaround is required for the corresponding lifecycle stage.
 
-**Status:** Runtime logging foundation delivered 2026-09-15 — user `console.log`/`console.error` no longer writes raw text onto the Node executor stdout protocol. The Node bridge converts console output into structured `LOG` protocol messages with `executionId`, stream and redacted message; Java consumes those messages without completing the execution and writes them to Runtime Worker logs. Persistence/query APIs are still open, so this is not yet full observability.
+**Status:** Runtime logging foundation delivered 2026-09-15 — user `console.log`/`console.error` no longer writes raw text onto the Node executor stdout protocol. The Node bridge converts console output into structured `LOG` protocol messages with `executionId`, stream and redacted message; Java consumes those messages without completing the execution and writes them to Runtime Worker logs.
+>
+> **Progress update (2026-09-23):** Build logs (F250) are now fully persisted and queryable — found unblocked and started directly from user request after a real STATIC deploy failure turned out to be undiagnosable live (build output only ever existed transiently in one deploy response, and a separate bug meant `GlobalExceptionHandler` wasn't even logging unexpected 500s server-side; see `MCP_TESTING_FEEDBACK.md` item 10). New `function_version_build_logs` table (migration V25); every `npm ci`/`npm install`/`npm run build` stage a deploy attempt runs is persisted the moment it completes, success or failure, via a new `BuildLogRecorder` seam threaded through `RuntimeBuilder.build(...)` (both `NodeRuntimeBuilder` and `StaticRuntimeBuilder`), independent of whether the overall deploy attempt itself later succeeds. Exposed on both surfaces this backlog tracks separately: `GET .../build-logs` (REST) and `get_function_version_build_logs` (MCP) - the latter is also referenced directly from every `BuildFailureException` message, since that is the only place an MCP-calling agent ever sees error detail (`BuildExceptionHandler`'s richer REST 422 response never fires for MCP tool calls). Live-verified end-to-end against the real running dev stack: a real failed `npm install` (malformed/missing config) and a real successful one both produced correctly-persisted, correctly-read-back rows; the new MCP tool confirmed registered via the real MCP protocol's `tools/list`. Invocation/runtime-level logs (F246/F247/F249) and telemetry (T02/T03) remain open - this closed the build-log slice of F248 specifically, not the whole epic.
 
 #### Tasks
 
 - [ ] **T01 — Logs**
   - [x] function stdout/stderr at runtime protocol boundary
-  - [ ] build logs
-  - [ ] persistence
-  - [ ] query API
+  - [x] build logs
+  - [x] persistence *(build logs only - invocation/runtime logs not yet persisted)*
+  - [x] query API *(build logs only, via REST `GET .../build-logs` and MCP `get_function_version_build_logs`)*
 - [ ] **T02 — Execution telemetry**
   - [ ] step timing
   - [ ] latency
@@ -1234,9 +1236,9 @@ Parallel work is allowed only where it does not change these contracts.
 |---|---|---|---|---|---:|
 | F246 | Invocation structured logs | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
 | F247 | Function stdout/stderr capture | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
-| F248 | Logs persisted/queryable | MISSING | P1 | M1 — Human zero-to-running | 0% |
+| F248 | Logs persisted/queryable | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
 | F249 | Step-level timing | PARTIAL | P1 | M1 — Human zero-to-running | 50% |
-| F250 | Build logs | MISSING | P1 | M1 — Human zero-to-running | 0% |
+| F250 | Build logs | COMPLETE | P1 | M1 — Human zero-to-running | 100% |
 | F251 | Runtime health metrics | MISSING | P2 | M1 — Human zero-to-running | 0% |
 | F252 | Invocation latency metrics | MISSING | P2 | M1 — Human zero-to-running | 0% |
 | F253 | Error rate metrics | MISSING | P2 | M1 — Human zero-to-running | 0% |

@@ -1,6 +1,7 @@
 package com.funchole.backend.controlplane.functionbuild.runtime.staticsite;
 
 import com.funchole.backend.artifact.ArtifactManifest;
+import com.funchole.backend.controlplane.functionbuild.BuildLogRecorder;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilder;
@@ -70,12 +71,12 @@ public class StaticRuntimeBuilder implements RuntimeBuilder {
     }
 
     @Override
-    public PreparedArtifact build(BuildWorkspace workspace) {
+    public PreparedArtifact build(BuildWorkspace workspace, BuildLogRecorder logRecorder) {
         Path buildDirectory = copyToNewDirectory(workspace.root(), BUILD_DIRECTORY_PREFIX + workspace.functionVersionId() + "-");
         Path artifactDirectory = null;
         try {
-            installDependencies(workspace.functionVersionId(), buildDirectory);
-            runBuildScript(workspace.functionVersionId(), buildDirectory);
+            installDependencies(workspace.functionVersionId(), buildDirectory, logRecorder);
+            runBuildScript(workspace.functionVersionId(), buildDirectory, logRecorder);
             Path outputDirectory = locateOutputDirectory(workspace.functionVersionId(), buildDirectory);
 
             artifactDirectory = copyToNewDirectory(outputDirectory, ARTIFACT_DIRECTORY_PREFIX + workspace.functionVersionId() + "-");
@@ -102,7 +103,7 @@ public class StaticRuntimeBuilder implements RuntimeBuilder {
         }
     }
 
-    private void installDependencies(UUID functionVersionId, Path buildDirectory) {
+    private void installDependencies(UUID functionVersionId, Path buildDirectory, BuildLogRecorder logRecorder) {
         Path packageJson = buildDirectory.resolve(PACKAGE_JSON);
         if (!Files.isRegularFile(packageJson)) {
             throw new IllegalStateException(
@@ -111,16 +112,19 @@ public class StaticRuntimeBuilder implements RuntimeBuilder {
         }
         boolean hasLockfile = Files.isRegularFile(buildDirectory.resolve(PACKAGE_LOCK_JSON));
         List<String> command = hasLockfile ? List.of("npm", "ci") : List.of("npm", "install");
-        runCommand(functionVersionId, STAGE_DEPENDENCY_INSTALL, command, buildDirectory, INSTALL_TIMEOUT);
+        runCommand(functionVersionId, STAGE_DEPENDENCY_INSTALL, command, buildDirectory, INSTALL_TIMEOUT, logRecorder);
     }
 
-    private void runBuildScript(UUID functionVersionId, Path buildDirectory) {
+    private void runBuildScript(UUID functionVersionId, Path buildDirectory, BuildLogRecorder logRecorder) {
         List<String> command = List.of("npm", "run", "build");
-        runCommand(functionVersionId, STAGE_BUILD, command, buildDirectory, BUILD_TIMEOUT);
+        runCommand(functionVersionId, STAGE_BUILD, command, buildDirectory, BUILD_TIMEOUT, logRecorder);
     }
 
-    private void runCommand(UUID functionVersionId, String stage, List<String> command, Path workingDirectory, Duration timeout) {
+    private void runCommand(
+            UUID functionVersionId, String stage, List<String> command, Path workingDirectory, Duration timeout, BuildLogRecorder logRecorder
+    ) {
         ProcessResult result = processExecutor.execute(command, workingDirectory, timeout);
+        logRecorder.record(stage, command, result);
         if (result.timedOut()) {
             throw new StaticBuildException(functionVersionId, stage, command, null, result.stdout(), result.stderr(), true);
         }

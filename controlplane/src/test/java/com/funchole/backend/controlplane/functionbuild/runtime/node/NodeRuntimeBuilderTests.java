@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.funchole.backend.artifact.ArtifactManifest;
+import com.funchole.backend.controlplane.functionbuild.BuildLogRecorder;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.process.ProcessExecutor;
@@ -176,6 +177,50 @@ class NodeRuntimeBuilderTests {
         assertThat(Files.exists(artifactDirectory)).isFalse();
     }
 
+    @Test
+    void dependencyFreeSourceNeverInvokesTheLogRecorder() {
+        BuildWorkspace workspace = workspaceWithFiles("index.js", "console.log('hi')");
+        RecordingBuildLogRecorder recorder = new RecordingBuildLogRecorder();
+
+        try (PreparedArtifact artifact = builder.build(workspace, recorder)) {
+            assertThat(recorder.entries()).isEmpty();
+        }
+    }
+
+    @Test
+    void successfulInstallIsRecordedBeforeReturning() {
+        BuildWorkspace workspace = workspaceWithFiles(
+                "index.js", "console.log('hi')",
+                "package.json", "{}");
+        processExecutor.nextResult(new ProcessResult(0, "installed", "", false));
+        RecordingBuildLogRecorder recorder = new RecordingBuildLogRecorder();
+
+        try (PreparedArtifact artifact = builder.build(workspace, recorder)) {
+            assertThat(recorder.entries()).hasSize(1);
+            RecordingBuildLogRecorder.Entry entry = recorder.entries().get(0);
+            assertThat(entry.stage()).isEqualTo(NodeRuntimeBuilder.STAGE_DEPENDENCY_INSTALL);
+            assertThat(entry.command()).isEqualTo(List.of("npm", "install"));
+            assertThat(entry.result().succeeded()).isTrue();
+            assertThat(entry.result().stdout()).isEqualTo("installed");
+        }
+    }
+
+    @Test
+    void failedInstallIsRecordedBeforeTheExceptionIsThrown() {
+        BuildWorkspace workspace = workspaceWithFiles(
+                "index.js", "console.log('hi')",
+                "package.json", "{}");
+        processExecutor.nextResult(new ProcessResult(1, "some stdout", "some stderr", false));
+        RecordingBuildLogRecorder recorder = new RecordingBuildLogRecorder();
+
+        assertThatThrownBy(() -> builder.build(workspace, recorder)).isInstanceOf(NodeBuildException.class);
+
+        assertThat(recorder.entries()).hasSize(1);
+        RecordingBuildLogRecorder.Entry entry = recorder.entries().get(0);
+        assertThat(entry.result().succeeded()).isFalse();
+        assertThat(entry.result().stderr()).isEqualTo("some stderr");
+    }
+
     private BuildWorkspace workspaceWithFiles(String... pathsAndContents) {
         return workspaceWithFiles(UUID.randomUUID(), pathsAndContents);
     }
@@ -228,6 +273,22 @@ class NodeRuntimeBuilderTests {
 
         List<String> lastCommand() {
             return capturedCommands.get(capturedCommands.size() - 1);
+        }
+    }
+
+    private static final class RecordingBuildLogRecorder implements BuildLogRecorder {
+        record Entry(String stage, List<String> command, ProcessResult result) {
+        }
+
+        private final List<Entry> entries = new ArrayList<>();
+
+        @Override
+        public void record(String stage, List<String> command, ProcessResult result) {
+            entries.add(new Entry(stage, command, result));
+        }
+
+        List<Entry> entries() {
+            return entries;
         }
     }
 }

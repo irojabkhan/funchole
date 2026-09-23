@@ -17,6 +17,7 @@ import com.funchole.backend.controlplane.repository.AppUserRepository;
 import com.funchole.backend.controlplane.repository.FunctionRepository;
 import com.funchole.backend.controlplane.repository.FunctionVersionRepository;
 import com.funchole.backend.controlplane.service.FunctionVersionArtifactRegistry;
+import com.funchole.backend.controlplane.service.FunctionVersionBuildLogService;
 import com.funchole.backend.controlplane.service.FunctionVersionDeploymentFinalizer;
 import com.funchole.backend.controlplane.service.FunctionVersionDeploymentService;
 import com.funchole.backend.controlplane.service.FunctionVersionLifecycleRegistry;
@@ -93,6 +94,9 @@ class FunctionVersionLifecycleRegistryTests {
 
     @Autowired
     private FunctionVersionLifecycleRegistry lifecycleRegistry;
+
+    @Autowired
+    private FunctionVersionBuildLogService buildLogService;
 
     private final List<UUID> createdFunctionIds = new ArrayList<>();
 
@@ -199,7 +203,7 @@ class FunctionVersionLifecycleRegistryTests {
         CountingArtifactPublisher publisher = new CountingArtifactPublisher(
                 new PublishedArtifact(functionVersionId, objectKey, SHA256_A, SIZE_A));
         FunctionVersionDeploymentService service = new FunctionVersionDeploymentService(
-                buildWorkspaceService, runtimeBuilderRegistry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry);
+                buildWorkspaceService, runtimeBuilderRegistry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         Callable<FunctionVersion> attempt = () -> {

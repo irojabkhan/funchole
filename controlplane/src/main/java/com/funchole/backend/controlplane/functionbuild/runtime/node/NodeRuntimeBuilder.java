@@ -1,6 +1,7 @@
 package com.funchole.backend.controlplane.functionbuild.runtime.node;
 
 import com.funchole.backend.artifact.ArtifactManifest;
+import com.funchole.backend.controlplane.functionbuild.BuildLogRecorder;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilder;
@@ -47,10 +48,10 @@ public class NodeRuntimeBuilder implements RuntimeBuilder {
     }
 
     @Override
-    public PreparedArtifact build(BuildWorkspace workspace) {
+    public PreparedArtifact build(BuildWorkspace workspace, BuildLogRecorder logRecorder) {
         Path artifactDirectory = copyToNewArtifactDirectory(workspace);
         try {
-            installDependenciesIfNeeded(workspace.functionVersionId(), artifactDirectory);
+            installDependenciesIfNeeded(workspace.functionVersionId(), artifactDirectory, logRecorder);
             verifyEntrypointStillExists(artifactDirectory, workspace.entrypoint());
             // Written into the artifact itself (not just returned here) because
             // this is the only copy of this information the Runtime Worker will
@@ -70,7 +71,7 @@ public class NodeRuntimeBuilder implements RuntimeBuilder {
         }
     }
 
-    private void installDependenciesIfNeeded(UUID functionVersionId, Path artifactDirectory) {
+    private void installDependenciesIfNeeded(UUID functionVersionId, Path artifactDirectory, BuildLogRecorder logRecorder) {
         Path packageJson = artifactDirectory.resolve(PACKAGE_JSON);
         if (!Files.isRegularFile(packageJson)) {
             // Dependency-free function: no package.json, so npm is never invoked.
@@ -80,6 +81,7 @@ public class NodeRuntimeBuilder implements RuntimeBuilder {
         List<String> command = hasLockfile ? List.of("npm", "ci") : List.of("npm", "install");
 
         ProcessResult result = processExecutor.execute(command, artifactDirectory, INSTALL_TIMEOUT);
+        logRecorder.record(STAGE_DEPENDENCY_INSTALL, command, result);
         if (result.timedOut()) {
             throw new NodeBuildException(
                     functionVersionId, STAGE_DEPENDENCY_INSTALL, command, null, result.stdout(), result.stderr(), true);

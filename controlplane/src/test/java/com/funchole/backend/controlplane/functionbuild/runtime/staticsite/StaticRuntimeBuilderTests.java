@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.funchole.backend.artifact.ArtifactManifest;
+import com.funchole.backend.controlplane.functionbuild.BuildLogRecorder;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.process.ProcessExecutor;
@@ -183,6 +184,38 @@ class StaticRuntimeBuilderTests {
         }
     }
 
+    @Test
+    void bothStagesAreRecordedInOrderOnSuccess() {
+        BuildWorkspace workspace = workspaceWithFiles("package.json", "{\"scripts\":{\"build\":\"vite build\"}}");
+        processExecutor.nextResult(new ProcessResult(0, "installed", "", false));
+        processExecutor.nextResult(new ProcessResult(0, "built", "", false), workingDirectory -> writeFile(
+                workingDirectory.resolve("dist/index.html"), "<html/>"));
+        RecordingBuildLogRecorder recorder = new RecordingBuildLogRecorder();
+
+        try (PreparedArtifact artifact = builder.build(workspace, recorder)) {
+            assertThat(recorder.entries()).hasSize(2);
+            assertThat(recorder.entries().get(0).stage()).isEqualTo(StaticRuntimeBuilder.STAGE_DEPENDENCY_INSTALL);
+            assertThat(recorder.entries().get(0).result().succeeded()).isTrue();
+            assertThat(recorder.entries().get(1).stage()).isEqualTo(StaticRuntimeBuilder.STAGE_BUILD);
+            assertThat(recorder.entries().get(1).command()).isEqualTo(List.of("npm", "run", "build"));
+            assertThat(recorder.entries().get(1).result().succeeded()).isTrue();
+        }
+    }
+
+    @Test
+    void onlyTheFailingStageIsRecordedWhenInstallFails() {
+        BuildWorkspace workspace = workspaceWithFiles("package.json", "{}");
+        processExecutor.nextResult(new ProcessResult(1, "install stdout", "install stderr", false));
+        RecordingBuildLogRecorder recorder = new RecordingBuildLogRecorder();
+
+        assertThatThrownBy(() -> builder.build(workspace, recorder)).isInstanceOf(StaticBuildException.class);
+
+        assertThat(recorder.entries()).hasSize(1);
+        assertThat(recorder.entries().get(0).stage()).isEqualTo(StaticRuntimeBuilder.STAGE_DEPENDENCY_INSTALL);
+        assertThat(recorder.entries().get(0).result().succeeded()).isFalse();
+        assertThat(recorder.entries().get(0).result().stderr()).isEqualTo("install stderr");
+    }
+
     private BuildWorkspace workspaceWithFiles(String... pathsAndContents) {
         return workspaceWithFiles(UUID.randomUUID(), pathsAndContents);
     }
@@ -255,6 +288,22 @@ class StaticRuntimeBuilderTests {
 
         List<String> commandAt(int index) {
             return capturedCommands.get(index);
+        }
+    }
+
+    private static final class RecordingBuildLogRecorder implements BuildLogRecorder {
+        record Entry(String stage, List<String> command, ProcessResult result) {
+        }
+
+        private final List<Entry> entries = new ArrayList<>();
+
+        @Override
+        public void record(String stage, List<String> command, ProcessResult result) {
+            entries.add(new Entry(stage, command, result));
+        }
+
+        List<Entry> entries() {
+            return entries;
         }
     }
 }
