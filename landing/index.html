@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuncHole — self-hosted serverless, agent-native</title>
+<meta name="description" content="FuncHole is an open-source serverless platform. Compose Functions into Flows, expose them through a Gateway, and let a coding agent run the whole lifecycle over MCP. Try it hosted, or self-host it yourself.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000000'/%3E%3Cpath d='M9 9h14M9 16h10M9 23h14' stroke='%2338d996' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script>document.documentElement.classList.add('js-enabled');</script>
+</head>
+<body>
+
+<a href="#main" class="visually-hidden">Skip to content</a>
+
+<div class="nav-outer">
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="FuncHole home">
+      <span class="brand-mark" aria-hidden="true">FH</span>
+      FuncHole
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#model">How it works</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#mcp">MCP</a>
+      <a href="#features">Features</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-ghost btn-sm" href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+      <a class="btn btn-primary btn-sm" href="https://app.funchole.dev/login">Try it</a>
+    </div>
+  </header>
+</div>
+
+<main id="main">
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="top">
+    <div class="wrap">
+      <span class="hero-badge">
+        <span class="tag">OPEN SOURCE</span>
+        Function → Flow → Gateway, agent-native over MCP
+      </span>
+
+      <h1>Run your own <span class="accent">serverless</span>, end to end.</h1>
+
+      <p class="hero-sub">
+        Compose Functions into Flows and expose them through a Gateway — build,
+        deploy and debug the whole lifecycle yourself, or hand it to a coding
+        agent over MCP. Try it hosted in a minute, or self-host it forever.
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="https://app.funchole.dev/login">
+          Try it — app.funchole.dev
+        </a>
+        <a class="btn btn-ghost btn-lg" href="https://github.com" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.5v-1.75c-2.78.62-3.37-1.36-3.37-1.36-.46-1.2-1.11-1.52-1.11-1.52-.91-.64.07-.63.07-.63 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.34 1.12 2.91.86.09-.67.35-1.12.64-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 5 0c1.9-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9v2.82c0 .28.18.61.69.5A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>
+          Self-host it
+        </a>
+      </div>
+
+      <p class="hero-note">Apache 2.0 · Java 25 · Spring Boot · Netty · <a href="#quickstart">or run it yourself in one command →</a></p>
+    </div>
+
+    <div class="mockup-wrap reveal">
+      <div class="mockup" role="img" aria-label="FuncHole control plane showing a deployed Flow and two running invocations">
+        <div class="mockup-bar">
+          <span class="mockup-dot"></span><span class="mockup-dot"></span><span class="mockup-dot"></span>
+          <span class="mockup-title">app.funchole.dev — orders-api</span>
+        </div>
+        <div class="mockup-body">
+          <div class="mockup-side">
+            <h5>Flows</h5>
+            <div class="mockup-tree">
+              <div class="mockup-tree-item active"><span class="dot"></span>orders</div>
+              <div class="mockup-tree-item"><span class="dot"></span>checkout</div>
+              <div class="mockup-tree-item"><span class="dot"></span>webhooks/stripe</div>
+              <div class="mockup-tree-item"><span class="dot"></span>app/* (STATIC)</div>
+            </div>
+            <h5 style="margin-top:22px">Gateway</h5>
+            <div class="mockup-tree">
+              <div class="mockup-tree-item"><span class="dot"></span>gw1.example.com</div>
+            </div>
+          </div>
+          <div class="mockup-main">
+            <div class="mockup-main-head">
+              <h4>orders — GET /orders</h4>
+              <span class="pill-status ready"><span class="dot"></span>READY</span>
+            </div>
+            <div class="mockup-cards">
+              <div class="mockup-card is-active">
+                <div class="mockup-card-head">
+                  <span>validate-order</span>
+                  <span class="pill-status running"><span class="dot"></span>running</span>
+                </div>
+                <code>FUNCTION · NODE · v4</code>
+                <p>invocationId 7f2a…3c1 · 42ms</p>
+              </div>
+              <div class="mockup-card">
+                <div class="mockup-card-head">
+                  <span>fetch-inventory</span>
+                  <span class="pill-status ready"><span class="dot"></span>completed</span>
+                </div>
+                <code>FUNCTION · NODE · v2</code>
+                <p>invocationId 7f2a…3c1 · 118ms</p>
+              </div>
+              <div class="mockup-card">
+                <div class="mockup-card-head">
+                  <span>respond</span>
+                  <span class="pill-status ready"><span class="dot"></span>completed</span>
+                </div>
+                <code>RESPONSE · {"status":200}</code>
+                <p>invocationId 7f2a…3c1 · 9ms</p>
+              </div>
+              <div class="mockup-card">
+                <div class="mockup-card-head">
+                  <span>orders-frontend</span>
+                  <span class="pill-status ready"><span class="dot"></span>READY</span>
+                </div>
+                <code>STATIC · served by Gateway</code>
+                <p>no invocation created</p>
+              </div>
+            </div>
+            <div class="mockup-composer">
+              <span>Ask the FuncHole MCP agent to add a step…</span>
+              <span class="send"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ WHY ============ -->
+  <section class="border-t">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow" style="justify-content:center">Why FuncHole</span>
+        <h2>A different model from the usual serverless provider.</h2>
+        <p>Most serverless platforms tightly couple deployment, routing, runtime behavior and
+          infrastructure ownership to a single vendor. FuncHole is exploring a different shape —
+          try it hosted, or run every part of it on infrastructure you own.</p>
+      </div>
+
+      <div class="why-grid reveal reveal-stagger">
+        <div class="why-card" style="--i:0">
+          <span class="num">01</span>
+          <h3>Hosted or self-hosted</h3>
+          <p>Sign in at <code>app.funchole.dev</code> and deploy in a minute, or run the same platform on your own Docker Compose stack — Postgres, NATS, OpenBao and RustFS included.</p>
+        </div>
+        <div class="why-card" style="--i:1">
+          <span class="num">02</span>
+          <h3>Gateway-first routing</h3>
+          <p>Every request resolves through an explicit Gateway you own — exact paths, <code>:name</code> capture, or a <code>/*</code> wildcard subtree, all under one stable host.</p>
+        </div>
+        <div class="why-card" style="--i:2">
+          <span class="num">03</span>
+          <h3>Explicit boundaries</h3>
+          <p>Management, ingress, invocation and runtime are separate services with a documented contract between them — not one opaque black box.</p>
+        </div>
+        <div class="why-card" style="--i:3">
+          <span class="num">04</span>
+          <h3>Two real runtimes</h3>
+          <p>A <code>NODE</code> Function runs your handler; a <code>STATIC</code> Function serves a pre-built site's files directly through the Gateway — no code execution, no cold start.</p>
+        </div>
+        <div class="why-card" style="--i:4">
+          <span class="num">05</span>
+          <h3>Secrets done properly</h3>
+          <p>Function and Environment secrets are written to OpenBao, never to Postgres in plaintext — injected at invocation time, not baked into an image.</p>
+        </div>
+        <div class="why-card" style="--i:5">
+          <span class="num">06</span>
+          <h3>Real TLS, not a shim</h3>
+          <p>Self-signed for local dev, real ACME/Let's Encrypt issuance and renewal in production — the same HTTP-01 flow a normal CA-backed site uses.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODEL ============ -->
+  <section class="border-t" id="model">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow" style="justify-content:center">The model</span>
+        <h2>Function → Flow → Gateway.</h2>
+        <p>Three concepts, composed in order. Everything else — build pipeline, invocation
+          registry, dispatch — exists to make this composition durable and inspectable.</p>
+      </div>
+
+      <div class="model reveal reveal-stagger">
+        <div class="model-step" style="--i:0">
+          <span class="tag">Function</span>
+          <h3>Build once, versioned</h3>
+          <p>Submit source, build to an immutable artifact, deploy to <code>READY</code>. A Function is either <code>NODE</code> (runs your handler) or <code>STATIC</code> (serves a built frontend).</p>
+          <code>submit → build → READY</code>
+        </div>
+        <div class="model-step" style="--i:1">
+          <span class="tag">Flow</span>
+          <h3>Compose steps</h3>
+          <p>Wire exact FunctionVersions into a step sequence — <code>FUNCTION</code>, <code>RESPONSE</code>, <code>MIDDLEWARE</code>, even a nested <code>SUB_FLOW</code> — then adopt the version.</p>
+          <code>draft → adopt → ADOPTED</code>
+        </div>
+        <div class="model-step" style="--i:2">
+          <span class="tag">Gateway</span>
+          <h3>Expose under a host</h3>
+          <p>An adopted Flow's path becomes a live route under your Gateway's host — exact, <code>:name</code>, or <code>/*</code> — and the request lifecycle is fully inspectable afterward.</p>
+          <code>route → invoke → inspect</code>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ARCHITECTURE ============ -->
+  <section class="border-t" id="architecture">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow" style="justify-content:center">Architecture</span>
+        <h2>Global coordination is event-driven. Local execution is IPC-driven.</h2>
+        <p>A request resolves through the Gateway, gets frozen as an immutable dependency
+          snapshot in the Invocation Registry, and is coordinated globally over NATS JetStream —
+          while the actual runtime hand-off happens over a fast local IPC channel.</p>
+      </div>
+
+      <div class="diagram-panel reveal">
+        <div class="diagram-caption">
+          <span>Request lifecycle — one HTTP call, end to end</span>
+          <span><strong>dashed</strong> = STATIC bypasses this entire path</span>
+        </div>
+
+        <svg class="flow-svg" viewBox="0 0 980 260" role="img" aria-label="Diagram: Client to Gateway to Invocation Registry to NATS JetStream to Dispatcher to Runtime, and back. A STATIC Flow bypasses the Registry, JetStream, Dispatcher and Runtime entirely, served directly from the Gateway.">
+          <defs>
+            <marker id="arrow" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,0 L8,4 L0,8 z" fill="var(--border-strong)"></path>
+            </marker>
+          </defs>
+
+          <path id="edge1" class="flow-edge" marker-end="url(#arrow)" d="M110,66 C160,66 160,66 200,66"></path>
+          <path id="edge2" class="flow-edge" marker-end="url(#arrow)" d="M320,66 C380,66 380,66 440,66"></path>
+          <path id="edge3" class="flow-edge" marker-end="url(#arrow)" d="M560,66 C610,66 610,66 660,66"></path>
+          <path id="edge4" class="flow-edge" marker-end="url(#arrow)" d="M780,66 C830,66 830,66 870,66"></path>
+
+          <path class="flow-edge" marker-end="url(#arrow)" d="M870,120 C700,150 500,150 320,120" opacity="0.55"></path>
+          <text class="flow-edge-label" x="595" y="158" text-anchor="middle">completion notification</text>
+
+          <path class="flow-edge" stroke-dasharray="4 4" marker-end="url(#arrow)" d="M260,100 C260,210 700,210 870,100"></path>
+          <text class="flow-edge-label" x="565" y="228" text-anchor="middle">STATIC — served straight from the cached artifact</text>
+
+          <g class="flow-node" transform="translate(20,40)">
+            <rect width="90" height="52" rx="10"></rect>
+            <text class="label" x="45" y="24" text-anchor="middle">Client</text>
+            <text class="sub" x="45" y="40" text-anchor="middle">HTTP request</text>
+          </g>
+
+          <g class="flow-node" transform="translate(200,40)">
+            <rect width="120" height="52" rx="10"></rect>
+            <text class="label" x="60" y="24" text-anchor="middle">Gateway</text>
+            <text class="sub" x="60" y="40" text-anchor="middle">resolves Flow</text>
+          </g>
+
+          <g class="flow-node" transform="translate(440,40)">
+            <rect width="120" height="52" rx="10"></rect>
+            <text class="label" x="60" y="24" text-anchor="middle">Registry</text>
+            <text class="sub" x="60" y="40" text-anchor="middle">+ JetStream</text>
+          </g>
+
+          <g class="flow-node" transform="translate(660,40)">
+            <rect width="120" height="52" rx="10"></rect>
+            <text class="label" x="60" y="24" text-anchor="middle">Dispatcher</text>
+            <text class="sub" x="60" y="40" text-anchor="middle">plans next step</text>
+          </g>
+
+          <g class="flow-node" transform="translate(870,40)">
+            <rect width="90" height="52" rx="10"></rect>
+            <text class="label" x="45" y="24" text-anchor="middle">Runtime</text>
+            <text class="sub" x="45" y="40" text-anchor="middle">IPC exec</text>
+          </g>
+
+          <circle class="flow-pulse" r="3.4"><animateMotion dur="2.6s" repeatCount="indefinite" begin="0s"><mpath href="#edge1"></mpath></animateMotion></circle>
+          <circle class="flow-pulse" r="3.4"><animateMotion dur="2.6s" repeatCount="indefinite" begin="0.5s"><mpath href="#edge2"></mpath></animateMotion></circle>
+          <circle class="flow-pulse" r="3.4"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1s"><mpath href="#edge3"></mpath></animateMotion></circle>
+          <circle class="flow-pulse" r="3.4"><animateMotion dur="2.6s" repeatCount="indefinite" begin="1.5s"><mpath href="#edge4"></mpath></animateMotion></circle>
+        </svg>
+
+        <div class="flow-legend">
+          <span><span class="legend-dot accent"></span>invocation-bound traffic</span>
+          <span><span class="legend-dot"></span>completion / coordination</span>
+          <span>a STATIC Flow never creates an Invocation, and never touches the Registry, NATS or the Dispatcher</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MCP ============ -->
+  <section class="border-t" id="mcp">
+    <div class="wrap mcp-grid">
+      <div class="mcp-copy reveal">
+        <span class="eyebrow">Agent-native</span>
+        <h2>Let a coding agent run the whole lifecycle.</h2>
+        <p>The <code>controlplane</code> module runs a real MCP server at <code>/api/mcp</code>.
+          Every operation available over REST — create, build, deploy, wire into a Flow, route,
+          invoke, inspect — is a tool call. An agent authenticates with its own scoped API key,
+          never a user's session.</p>
+
+        <ul class="mcp-list">
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span><b>get_flow_full_source</b> returns a Flow's entire dependency tree — every step's Function source inlined, <code>SUB_FLOW</code> steps expanded recursively — in one call.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Dedicated <code>fh_mcp_...</code> API keys, separate from user JWTs, scoped for agent access.</span>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            <span>Build failures return structured detail an agent can act on directly, with example-source tools it can call when it's stuck.</span>
+          </li>
+        </ul>
+
+        <div class="agent-badges">
+          <span class="agent-badge">Claude Code</span>
+          <span class="agent-badge">opencode</span>
+          <span class="agent-badge">Codex CLI</span>
+          <span class="agent-badge">Puku</span>
+        </div>
+      </div>
+
+      <div class="terminal reveal" role="img" aria-label="Terminal showing how to connect an MCP client to FuncHole">
+        <div class="terminal-bar">
+          <span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span>
+          <span class="terminal-title">connect-agent.sh</span>
+        </div>
+        <div class="terminal-body">
+          <div class="line terminal-out"># mint a scoped key for the agent</div>
+          <div class="line"><span class="terminal-prompt">$ </span>curl -X POST .../api-keys \</div>
+          <div class="line">&nbsp;&nbsp;-d '{"name": "my-agent"}'</div>
+          <div class="line terminal-out">→ rawKey: <span class="terminal-ok">fh_mcp_••••••••</span></div>
+          <div class="line">&nbsp;</div>
+          <div class="line terminal-out"># connect a client over Streamable HTTP</div>
+          <div class="line"><span class="terminal-prompt">$ </span>claude mcp add --transport http \</div>
+          <div class="line">&nbsp;&nbsp;funchole <span class="terminal-path">http://localhost:7080/api/mcp</span> \</div>
+          <div class="line">&nbsp;&nbsp;--header "Authorization: Bearer fh_mcp_..."</div>
+          <div class="line terminal-out">✓ connected — 65+ tools available</div>
+          <div class="line">&nbsp;</div>
+          <div class="line"><span class="terminal-prompt">$ </span><span class="terminal-cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="border-t" id="features">
+    <div class="wrap">
+      <div class="section-head reveal">
+        <span class="eyebrow" style="justify-content:center">What's implemented</span>
+        <h2>The full lifecycle, end to end — not a demo of one slice.</h2>
+        <p>Create → source → build → deploy → compose → route → invoke → inspect all work
+          through the real product surface, today.</p>
+      </div>
+
+      <div class="features reveal reveal-stagger">
+        <div class="feature" style="--i:0">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg></span>
+          <h3>Dual runtime</h3>
+          <p><code>NODE</code> for handler logic, <code>STATIC</code> for a pre-built frontend — same build pipeline, same deploy lifecycle.</p>
+        </div>
+        <div class="feature" style="--i:1">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>
+          <h3>OpenBao-backed secrets</h3>
+          <p>Certificate material and Function/Environment secrets live in OpenBao, injected at invocation time.</p>
+        </div>
+        <div class="feature" style="--i:2">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10"></path><path d="M12 2v10l7 7"></path></svg></span>
+          <h3>Real ACME/Let's Encrypt</h3>
+          <p>HTTP-01 issuance and expiry-based renewal in production; self-signed certs for local dev.</p>
+        </div>
+        <div class="feature" style="--i:3">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span>
+          <h3>Shared Database / Environment</h3>
+          <p>Attach a Database or Environment profile to a Function or Flow — env vars and secrets resolve at invoke time.</p>
+        </div>
+        <div class="feature" style="--i:4">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v4H4zM4 12h10v8H4zM18 12h2v8h-2z"></path></svg></span>
+          <h3>Three route shapes</h3>
+          <p>Exact match, <code>:name</code> path-parameter capture, or a <code>/*</code> wildcard subtree — under one stable gateway host.</p>
+        </div>
+        <div class="feature" style="--i:5">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg></span>
+          <h3>Inspectable invocations</h3>
+          <p>Every invocation's immutable dependency snapshot, step results and status are queryable after the fact.</p>
+        </div>
+        <div class="feature" style="--i:6">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18M3 15v4a2 2 0 0 0 2 2h4"></path></svg></span>
+          <h3>Nested Flows</h3>
+          <p><code>SUB_FLOW</code> steps expand a referenced Flow's own step sequence in-place — compose Flows out of Flows.</p>
+        </div>
+        <div class="feature" style="--i:7">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5z"></path><line x1="16" y1="8" x2="2" y2="22"></line><line x1="17.5" y1="15" x2="9" y2="15"></line></svg></span>
+          <h3>Next.js control-plane UI</h3>
+          <p>Manage Functions, Flows, Gateways and Databases by hand whenever you'd rather not go through an agent.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ STACK ============ -->
+  <section class="border-t">
+    <div class="wrap">
+      <div class="section-head reveal" style="margin-bottom: 32px;">
+        <span class="eyebrow" style="justify-content:center">Built on</span>
+        <h2>No framework magic hiding the moving parts.</h2>
+      </div>
+      <div class="stack-strip reveal">
+        <span class="stack-chip">Java 25</span>
+        <span class="stack-chip">Spring Boot 4.1</span>
+        <span class="stack-chip">Raw Netty</span>
+        <span class="stack-chip">PostgreSQL 17</span>
+        <span class="stack-chip">Flyway</span>
+        <span class="stack-chip">NATS + JetStream</span>
+        <span class="stack-chip">OpenBao</span>
+        <span class="stack-chip">Next.js</span>
+        <span class="stack-chip">Docker Compose</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ QUICK START ============ -->
+  <section class="border-t" id="quickstart">
+    <div class="wrap">
+      <div class="quickstart reveal">
+        <div>
+          <span class="eyebrow">Self-host it</span>
+          <h2>One command, full local stack.</h2>
+          <p>Controlplane, Gateway, Postgres, NATS, OpenBao and RustFS all come up together —
+            nothing to provision by hand before your first deploy.</p>
+          <div class="service-table">
+            <div class="service-row"><span>Controlplane</span><span>localhost:7080</span></div>
+            <div class="service-row"><span>Control-plane web UI</span><span>localhost:3000</span></div>
+            <div class="service-row"><span>Gateway</span><span>https://localhost</span></div>
+            <div class="service-row"><span>NATS monitoring</span><span>localhost:8222</span></div>
+          </div>
+        </div>
+        <div class="terminal">
+          <div class="terminal-bar">
+            <span class="terminal-dot"></span><span class="terminal-dot"></span><span class="terminal-dot"></span>
+            <span class="terminal-title">quick-start.sh</span>
+          </div>
+          <div class="terminal-body">
+            <div class="line"><span class="terminal-prompt">$ </span>git clone <span class="terminal-path">github.com/&lt;org&gt;/funchole</span></div>
+            <div class="line"><span class="terminal-prompt">$ </span>cd funchole</div>
+            <div class="line"><span class="terminal-prompt">$ </span>docker compose -f docker-compose.dev.yml \</div>
+            <div class="line">&nbsp;&nbsp;up --build</div>
+            <div class="line">&nbsp;</div>
+            <div class="line terminal-out"># verify it's alive</div>
+            <div class="line"><span class="terminal-prompt">$ </span>curl localhost:7080/actuator/health</div>
+            <div class="line terminal-out">→ <span class="terminal-ok">{"status":"UP"}</span></div>
+            <div class="line">&nbsp;</div>
+            <div class="line"><span class="terminal-prompt">$ </span><span class="terminal-cursor"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="cta border-t">
+    <div class="wrap">
+      <span class="eyebrow" style="justify-content:center">Get started</span>
+      <h2>Own your serverless stack, top to bottom.</h2>
+      <p>Try FuncHole hosted in a minute, or clone it and deploy on infrastructure you
+        control. FuncHole is under active development — tell us where the model breaks.</p>
+      <div class="cta-actions">
+        <a class="btn btn-primary btn-lg" href="https://app.funchole.dev/login">Try it — app.funchole.dev</a>
+        <a class="btn btn-ghost btn-lg" href="https://discord.gg/yS8etyU7p" target="_blank" rel="noopener">Join the Discord</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer border-t">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">
+          <span class="brand-mark" aria-hidden="true">FH</span>
+          FuncHole
+        </div>
+        <p class="footer-tagline">An open-source serverless platform — Function, Flow, Gateway, MCP. Hosted or self-hosted.</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="https://app.funchole.dev/login">Try it</a></li>
+            <li><a href="#model">How it works</a></li>
+            <li><a href="#mcp">MCP server</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Resources</h4>
+          <ul>
+            <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+            <li><a href="#quickstart">Self-host it</a></li>
+            <li><a href="https://discord.gg/yS8etyU7p" target="_blank" rel="noopener">Discord</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Project</h4>
+          <ul>
+            <li><a href="#">Contributing</a></li>
+            <li><a href="#">License — Apache 2.0</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>FuncHole — under active development.</span>
+      <span>Function → Flow → Gateway</span>
+    </div>
+  </div>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
