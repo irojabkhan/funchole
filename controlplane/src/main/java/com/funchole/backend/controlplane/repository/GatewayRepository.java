@@ -17,4 +17,6 @@ public interface GatewayRepository extends JpaRepository<Gateway, UUID> {
     Optional<Gateway> findByIdAndAppUser_Id(UUID id, UUID appUserId);
 
     boolean existsByUniqueKey(String uniqueKey);
+
+    long countByAppUser_Id(UUID appUserId);
 }

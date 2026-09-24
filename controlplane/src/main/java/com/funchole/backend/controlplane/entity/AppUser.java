@@ -78,4 +78,26 @@ public class AppUser {
     public void setPasswordChangeRequired(boolean passwordChangeRequired) {
         this.passwordChangeRequired = passwordChangeRequired;
     }
+
+    /**
+     * Self-registration via Google sign-in (cloud mode only - see
+     * {@code CloudSignupService}). {@code passwordHash} is a random,
+     * unusable placeholder the caller generates (this account only ever
+     * authenticates via a verified Google ID token, never a password) -
+     * kept as a real parameter rather than generated here so this entity
+     * stays framework-agnostic (no {@code PasswordEncoder} dependency).
+     */
+    public static AppUser createFromGoogleSignUp(String username, String email, String fullName, String passwordHash) {
+        AppUser appUser = new AppUser();
+        OffsetDateTime now = OffsetDateTime.now();
+        appUser.id = UUID.randomUUID();
+        appUser.username = username;
+        appUser.email = email;
+        appUser.fullName = fullName;
+        appUser.passwordHash = passwordHash;
+        appUser.passwordChangeRequired = false;
+        appUser.createdAt = now;
+        appUser.updatedAt = now;
+        return appUser;
+    }
 }

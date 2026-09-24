@@ -1,6 +1,7 @@
 package com.funchole.backend.controlplane.service;
 
 import com.funchole.backend.controlplane.constant.DomainStatus;
+import com.funchole.backend.controlplane.constant.PackageLimitKey;
 import com.funchole.backend.controlplane.dto.DomainCreateRequest;
 import com.funchole.backend.controlplane.entity.AppDomain;
 import com.funchole.backend.controlplane.entity.AppUser;
@@ -30,12 +31,17 @@ public class DomainService {
     private static final Logger logger = LoggerFactory.getLogger(DomainService.class);
 
     private final AppDomainRepository domainRepository;
+    private final PackageLimitService packageLimitService;
 
-    public DomainService(AppDomainRepository domainRepository) {
+    public DomainService(AppDomainRepository domainRepository, PackageLimitService packageLimitService) {
         this.domainRepository = domainRepository;
+        this.packageLimitService = packageLimitService;
     }
 
     public AppDomain createDomain(AppUser appUser, DomainCreateRequest request) {
+        packageLimitService.enforce(appUser.getId(), PackageLimitKey.MAX_DOMAINS,
+                domainRepository.countByAppUser_Id(appUser.getId()));
+
         AppDomain appDomain = AppDomain.create(
                 appUser,
                 request.domainName(),

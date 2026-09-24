@@ -17,4 +17,6 @@ public interface FlowRepository extends JpaRepository<Flow, UUID> {
     Optional<Flow> findByIdAndAppUser_IdAndDeletedAtIsNull(UUID id, UUID appUserId);
 
     boolean existsByFlowKey(String flowKey);
+
+    long countByAppUser_IdAndDeletedAtIsNull(UUID appUserId);
 }

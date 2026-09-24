@@ -121,4 +121,16 @@ app:
     client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
     # Comma-separated. Only these exact Google account emails may sign in -
     # and always as the one bootstrap admin account above, never as a new one.
+    # Not consulted at all when app.cloud-mode.enabled is true (below).
     allowed-emails: ${ADMIN_ALLOWED_GOOGLE_EMAILS:}
+  cloud-mode:
+    # false (self-hosted default): every package/quota check in
+    # PackageLimitService is a no-op and Google sign-in stays scoped to the
+    # single allowlisted admin above. true: any verified Google account can
+    # self-register (see CloudSignupService), gets the free package, and is
+    # subject to its limits on Function/Flow/Gateway/Domain creation.
+    enabled: ${CLOUD_MODE_ENABLED:false}
+    # Required only when enabled=true: the id of an already-created,
+    # already-verified AppDomain that every self-registered user's
+    # auto-provisioned default Gateway attaches to - see docs/development.md.
+    default-domain-id: ${CLOUD_DEFAULT_DOMAIN_ID:}

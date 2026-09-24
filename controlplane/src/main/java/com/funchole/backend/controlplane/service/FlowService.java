@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane.service;
 
+import com.funchole.backend.controlplane.constant.PackageLimitKey;
 import com.funchole.backend.controlplane.dto.FlowCreateRequest;
 import com.funchole.backend.controlplane.dto.FlowUpdateRequest;
 import com.funchole.backend.controlplane.entity.AppUser;
@@ -24,10 +25,12 @@ public class FlowService {
 
     private final FlowRepository flowRepository;
     private final GatewayRepository gatewayRepository;
+    private final PackageLimitService packageLimitService;
 
-    public FlowService(FlowRepository flowRepository, GatewayRepository gatewayRepository) {
+    public FlowService(FlowRepository flowRepository, GatewayRepository gatewayRepository, PackageLimitService packageLimitService) {
         this.flowRepository = flowRepository;
         this.gatewayRepository = gatewayRepository;
+        this.packageLimitService = packageLimitService;
     }
 
     public Page<Flow> listFlows(UUID appUserId, int page, int size) {
@@ -50,6 +53,8 @@ public class FlowService {
             throw new IllegalArgumentException("Flow key already in use: " + request.flowKey());
         }
         validatePath(request.path());
+        packageLimitService.enforce(appUser.getId(), PackageLimitKey.MAX_FLOWS,
+                flowRepository.countByAppUser_IdAndDeletedAtIsNull(appUser.getId()));
 
         Gateway gateway = getOwnedGateway(appUser.getId(), request.gatewayId());
 

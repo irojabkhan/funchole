@@ -31,6 +31,13 @@ services:
       # docs/development.md for how to create a Client ID.
       GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
       ADMIN_ALLOWED_GOOGLE_EMAILS: ${ADMIN_ALLOWED_GOOGLE_EMAILS:-}
+      # Optional, cloud product only - false (default) keeps this a normal
+      # unlimited self-hosted instance. See docs/development.md before
+      # setting this true: it turns on real self-registration (any Google
+      # account, not just the allowlist above) and package/quota
+      # enforcement, and needs CLOUD_DEFAULT_DOMAIN_ID configured too.
+      CLOUD_MODE_ENABLED: ${CLOUD_MODE_ENABLED:-false}
+      CLOUD_DEFAULT_DOMAIN_ID: ${CLOUD_DEFAULT_DOMAIN_ID:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s

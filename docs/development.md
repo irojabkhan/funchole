@@ -236,3 +236,48 @@ To get a Client ID:
    baked in at *build* time for the production `web` image - rebuild it
    rather than just restarting the container; the dev `web` service doesn't
    have this limitation.
+
+## Cloud Packages & Self-Registration Setup
+
+Optional, and only relevant to the hosted cloud product (`app.funchole.dev`)
+- self-hosted installs should leave `CLOUD_MODE_ENABLED` unset and skip this
+section entirely. See `CLOUD_MODE_ENABLED`/`CLOUD_DEFAULT_DOMAIN_ID` in
+[docs/environment-variables.md](environment-variables.md) for what the flag
+does. Turning it on requires both Google Sign-In (above, but without an
+`ADMIN_ALLOWED_GOOGLE_EMAILS` restriction - any verified Google account may
+now self-register) and one manually-verified platform domain:
+
+1. Follow the Google Sign-In Setup steps above to get a
+   `GOOGLE_OAUTH_CLIENT_ID`. `ADMIN_ALLOWED_GOOGLE_EMAILS` can stay empty -
+   it's ignored once `CLOUD_MODE_ENABLED=true`.
+2. Decide the domain new users' auto-provisioned default Gateways will live
+   under (e.g. `apps.funchole.dev`). This must be a real domain you control
+   DNS for - it's verified the same way any FuncHole domain is, through the
+   normal domain-creation flow (`create_domain`/`initiate_domain_verification`,
+   REST or MCP), signed in as your own admin account:
+   1. Create the domain and note the TXT record FuncHole asks you to publish.
+   2. Publish that TXT record with your DNS provider.
+   3. Call `initiate_domain_verification` (or the equivalent REST endpoint)
+      and confirm the domain's status becomes `VERIFIED`.
+   4. Note that domain's `id` (UUID) - this is your `CLOUD_DEFAULT_DOMAIN_ID`.
+3. Set in `.env` (see `.env.example`):
+   ```
+   CLOUD_MODE_ENABLED=true
+   CLOUD_DEFAULT_DOMAIN_ID=<the verified domain's UUID from step 2>
+   ```
+4. Restart the stack. From this point, any verified Google sign-in that
+   isn't already an existing account self-registers: a new `AppUser`,
+   assigned the seeded `free` package, with one `Default Gateway`
+   auto-provisioned under `CLOUD_DEFAULT_DOMAIN_ID`.
+
+The `free` package's limits (1 Gateway, 0 attachable Domains, 20 Flows, 100
+Functions) live in the `packages`/`package_limits` tables (seeded by
+`V26__create_packages_and_quotas.sql`) and can be changed with a plain
+`UPDATE` - no deploy needed. A one-off exception for a single user (e.g.
+"give this user +1 gateway") goes in `user_package_overrides` instead of
+creating a new package tier; a `NULL` `limit_value` there means unlimited
+for that user on that one limit key.
+
+Test this against an isolated stack, not the shared dev stack - enabling
+cloud mode changes sign-in behavior for every Google account, not just
+yours.

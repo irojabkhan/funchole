@@ -3,6 +3,8 @@ package com.funchole.backend.controlplane.service;
 import com.funchole.backend.controlplane.dto.GatewayCreateRequest;
 import com.funchole.backend.controlplane.dto.GatewayUpdateRequest;
 import com.funchole.backend.controlplane.constant.DomainStatus;
+import com.funchole.backend.controlplane.constant.GatewayStatus;
+import com.funchole.backend.controlplane.constant.PackageLimitKey;
 import com.funchole.backend.controlplane.entity.AppDomain;
 import com.funchole.backend.controlplane.entity.AppUser;
 import com.funchole.backend.controlplane.entity.Gateway;
@@ -29,18 +31,21 @@ public class GatewayService {
     private final DomainService domainService;
     private final GatewayCertificateService gatewayCertificateService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final PackageLimitService packageLimitService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public GatewayService(
             GatewayRepository gatewayRepository,
             DomainService domainService,
             GatewayCertificateService gatewayCertificateService,
-            ApplicationEventPublisher applicationEventPublisher
+            ApplicationEventPublisher applicationEventPublisher,
+            PackageLimitService packageLimitService
     ) {
         this.gatewayRepository = gatewayRepository;
         this.domainService = domainService;
         this.gatewayCertificateService = gatewayCertificateService;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.packageLimitService = packageLimitService;
     }
 
     public Page<Gateway> listGateways(UUID appUserId, int page, int size) {
@@ -59,17 +64,40 @@ public class GatewayService {
 
     @Transactional
     public Gateway createGateway(AppUser appUser, GatewayCreateRequest request) {
+        packageLimitService.enforce(appUser.getId(), PackageLimitKey.MAX_GATEWAYS,
+                gatewayRepository.countByAppUser_Id(appUser.getId()));
         AppDomain appDomain = domainService.getDomainById(appUser.getId(), request.appDomainId());
         validateVerifiedDomain(appDomain);
+
+        return provisionGateway(appUser, appDomain, request.name(), request.description(), request.status());
+    }
+
+    /**
+     * System-driven provisioning for a freshly self-registered cloud user
+     * (see {@code CloudSignupService}) - not a user request, so it
+     * deliberately skips both the quota check above (this IS their quota's
+     * one free gateway, not a request against it) and
+     * {@code domainService.getDomainById}'s ownership check ({@code
+     * platformDomain} belongs to the platform/operator, never to the new
+     * user). Reuses the exact same key-generation and certificate-provisioning
+     * logic as a normal user-created gateway.
+     */
+    @Transactional
+    public Gateway createDefaultGateway(AppUser appUser, AppDomain platformDomain) {
+        validateVerifiedDomain(platformDomain);
+        return provisionGateway(appUser, platformDomain, "Default Gateway", "Auto-provisioned on sign-up", GatewayStatus.ACTIVE);
+    }
+
+    private Gateway provisionGateway(AppUser appUser, AppDomain appDomain, String name, String description, GatewayStatus status) {
         String uniqueKey = generateUniqueKey();
 
         Gateway gateway = Gateway.create(
                 appUser,
                 appDomain,
-                request.name(),
+                name,
                 uniqueKey,
-                request.description(),
-                request.status()
+                description,
+                status
         );
 
         Gateway savedGateway = gatewayRepository.save(gateway);

@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane.service;
 
+import com.funchole.backend.controlplane.constant.PackageLimitKey;
 import com.funchole.backend.controlplane.dto.FunctionCreateRequest;
 import com.funchole.backend.controlplane.dto.FunctionUpdateRequest;
 import com.funchole.backend.controlplane.entity.AppUser;
@@ -31,9 +32,11 @@ public class FunctionService {
     private static final Set<String> SUPPORTED_RUNTIMES = Set.of("NODE", "STATIC");
 
     private final FunctionRepository functionRepository;
+    private final PackageLimitService packageLimitService;
 
-    public FunctionService(FunctionRepository functionRepository) {
+    public FunctionService(FunctionRepository functionRepository, PackageLimitService packageLimitService) {
         this.functionRepository = functionRepository;
+        this.packageLimitService = packageLimitService;
     }
 
     public Page<Function> listFunctions(UUID appUserId, int page, int size) {
@@ -55,6 +58,8 @@ public class FunctionService {
         if (functionRepository.existsByFunctionKey(request.functionKey())) {
             throw new IllegalArgumentException("Function key already in use: " + request.functionKey());
         }
+        packageLimitService.enforce(appUser.getId(), PackageLimitKey.MAX_FUNCTIONS,
+                functionRepository.countByAppUser_IdAndDeletedAtIsNull(appUser.getId()));
 
         Function function = Function.create(
                 appUser,

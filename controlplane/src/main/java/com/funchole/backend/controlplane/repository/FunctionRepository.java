@@ -16,4 +16,6 @@ public interface FunctionRepository extends JpaRepository<Function, UUID> {
     Optional<Function> findByIdAndAppUser_IdAndDeletedAtIsNull(UUID id, UUID appUserId);
 
     boolean existsByFunctionKey(String functionKey);
+
+    long countByAppUser_IdAndDeletedAtIsNull(UUID appUserId);
 }

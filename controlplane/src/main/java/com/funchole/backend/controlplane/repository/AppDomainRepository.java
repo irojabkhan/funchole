@@ -12,4 +12,6 @@ public interface AppDomainRepository extends JpaRepository<AppDomain, UUID> {
     Page<AppDomain> findAllByAppUserId(UUID appUserId, Pageable pageable);
 
     Optional<AppDomain> findByIdAndAppUser_Id(UUID id, UUID appUserId);
+
+    long countByAppUser_Id(UUID appUserId);
 }
