@@ -51,6 +51,12 @@ services:
       # also needs its port 80 reachable from the internet for the HTTP-01
       # challenge (already published below).
       CERTIFICATE_PROVIDER: ${CERTIFICATE_PROVIDER:-SELF_SIGNED}
+      # Optional - "Sign in with Google" on the admin login page
+      # (localhost:3000/login) stays disabled until both are set. Same
+      # Client ID the web service's build arg above uses. See
+      # docs/development.md for how to create one.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      ADMIN_ALLOWED_GOOGLE_EMAILS: ${ADMIN_ALLOWED_GOOGLE_EMAILS:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s
@@ -222,6 +228,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
+      args:
+        # Same value the controlplane service uses for GOOGLE_OAUTH_CLIENT_ID
+        # below - the Client ID isn't secret, so one env var is the source of
+        # truth for both sides instead of two that could drift apart.
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
     depends_on:
       controlplane:
         condition: service_healthy

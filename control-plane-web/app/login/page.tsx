@@ -1,12 +1,15 @@
 "use client";
 
+import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api, ApiError } from "@/lib/api";
 import { setToken } from "@/lib/auth";
 import { Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,6 +17,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [googleScriptLoaded, setGoogleScriptLoaded] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,6 +34,42 @@ export default function LoginPage() {
     }
   }
 
+  const handleGoogleCredential = useCallback(
+    async (response: { credential: string }) => {
+      setError(null);
+      setPending(true);
+      try {
+        const token = await api.loginWithGoogle(response.credential);
+        setToken(token.accessToken, token.expiresAt);
+        router.replace("/");
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Google sign-in failed");
+        setPending(false);
+      }
+    },
+    [router]
+  );
+
+  // Google's own button only renders once its script has loaded and a real
+  // container element exists - both happen asynchronously and independently
+  // (the script tag firing onLoad, React committing the ref), so this waits
+  // on whichever finishes last rather than assuming an order.
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !googleScriptLoaded || !googleButtonRef.current || !window.google) {
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleCredential,
+    });
+    window.google.accounts.id.renderButton(googleButtonRef.current, {
+      theme: "outline",
+      size: "large",
+      width: 320,
+      text: "signin_with",
+    });
+  }, [googleScriptLoaded, handleGoogleCredential]);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Panel className="w-full max-w-sm p-8 shadow-sm">
@@ -41,6 +82,23 @@ export default function LoginPage() {
             <p className="text-xs text-muted">Control Plane</p>
           </div>
         </div>
+
+        {GOOGLE_CLIENT_ID && (
+          <>
+            <Script
+              src="https://accounts.google.com/gsi/client"
+              async
+              defer
+              onLoad={() => setGoogleScriptLoaded(true)}
+            />
+            <div className="mb-6 flex justify-center" ref={googleButtonRef} />
+            <div className="mb-6 flex items-center gap-3 text-xs text-muted">
+              <span className="h-px flex-1 bg-border" />
+              or sign in with a password
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          </>
+        )}
 
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <label className={fieldClass}>

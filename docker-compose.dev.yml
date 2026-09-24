@@ -26,6 +26,11 @@ services:
       S3_ARTIFACT_REGION: us-east-1
       S3_ARTIFACT_PATH_STYLE_ACCESS: "true"
       NATS_URL: nats://nats:4222
+      # Optional - "Sign in with Google" on the admin login page
+      # (localhost:3000/login) stays disabled until both are set. See
+      # docs/development.md for how to create a Client ID.
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      ADMIN_ALLOWED_GOOGLE_EMAILS: ${ADMIN_ALLOWED_GOOGLE_EMAILS:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s
@@ -237,6 +242,9 @@ services:
         condition: service_healthy
     environment:
       NEXT_PUBLIC_CONTROLPLANE_URL: http://localhost:7080
+      # `next dev` reads this live at compile time, unlike the production
+      # `web` image where it has to be a build ARG instead (see Dockerfile).
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
     ports:
       - "3000:3000"
     volumes:

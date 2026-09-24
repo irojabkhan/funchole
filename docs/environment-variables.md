@@ -58,6 +58,8 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `BOOTSTRAP_PASSWORD` | `admin12345` | if changed from this default, rotates the seeded admin account's password on next boot |
 | `BAO_ADDR` | `http://localhost:8200` | OpenBao address |
 | `BAO_TOKEN` | `root` | OpenBao token - in `docker-compose.yml` this arrives via `BAO_TOKEN_FILE`, not this variable directly (see below) |
+| `GOOGLE_OAUTH_CLIENT_ID` | `""` (empty) | Google OAuth 2.0 Client ID (Web application type). Unset = "Sign in with Google" is disabled on the login page and `POST /api/v1/auth/google` rejects every request with a clear "not configured" error - username/password login is unaffected either way. Not secret; the frontend also needs the same value as `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (see `control-plane-web` below) - `docker-compose.yml`/`docker-compose.dev.yml` already wire both from this one variable. |
+| `ADMIN_ALLOWED_GOOGLE_EMAILS` | `""` (empty) | Comma-separated allowlist. A verified Google sign-in only succeeds when its email matches one of these exactly (case-insensitive) - this never creates a new account, it only logs in AS the one `BOOTSTRAP_USERNAME` admin account above. Empty means no Google account is authorized, even with `GOOGLE_OAUTH_CLIENT_ID` set. |
 
 ## gateway
 
@@ -120,6 +122,18 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `S3_ARTIFACT_REGION` | `us-east-1` | |
 | `S3_ARTIFACT_PATH_STYLE_ACCESS` | `true` | |
 
+## control-plane-web
+
+`NEXT_PUBLIC_*` variables are inlined into the browser bundle when the
+frontend is built, not read again when the container starts - see "How
+values actually reach each service" below for why that makes the
+production `web` image's wiring different from every other service here.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `NEXT_PUBLIC_CONTROLPLANE_URL` | `http://localhost:7080` | base URL the browser calls for the Controlplane REST API |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `""` (empty) | same value as controlplane's `GOOGLE_OAUTH_CLIENT_ID` above - unset means the login page's "Sign in with Google" button simply doesn't render |
+
 ## How values actually reach each service
 
 Two separate layers are involved, and it's easy to set a value in the wrong one:
@@ -150,6 +164,16 @@ Two separate layers are involved, and it's easy to set a value in the wrong one:
      the JVM actually sees. Each service gets its own least-privilege token
      file (not a shared root token) - see `PRODUCTION_DEPLOYMENT_MISSING.md`
      section 4 for why.
+   - `control-plane-web`'s `NEXT_PUBLIC_*` variables are a third case,
+     specific to the production `web` image: Next.js inlines them into the
+     browser bundle at `npm run build` time, so a plain runtime
+     `environment:` entry (layer 2 above) has no effect on them there - the
+     production `web` service in `docker-compose.yml` instead passes
+     `NEXT_PUBLIC_GOOGLE_CLIENT_ID` in as a Docker build ARG (see the
+     Dockerfile's `build-web` stage). The dev `web` service doesn't need
+     this extra hop - `next dev` reads `NEXT_PUBLIC_*` values live from its
+     own container's environment on every compile, so a normal
+     `environment:` entry already works there.
 
 If you're overriding a value and it doesn't seem to take effect, check which
 layer it actually belongs to first.

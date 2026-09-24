@@ -94,6 +94,13 @@ RUN apt-get update \
 
 FROM node:22-alpine AS build-web
 WORKDIR /workspace/web
+# NEXT_PUBLIC_* values are inlined into the client bundle at this build step,
+# not read again at container-start time - a runtime `environment:` entry in
+# docker-compose.yml has no effect on them, so this one has to arrive as a
+# real build ARG instead. Empty by default: the login page's Google button
+# simply doesn't render when this is unset (see app/login/page.tsx).
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
 COPY control-plane-web/package.json control-plane-web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY control-plane-web/ ./

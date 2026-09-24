@@ -60,6 +60,11 @@ dependencies {
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
     implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
     implementation "io.jsonwebtoken:jjwt-api:${jwtVersion}"
+    // Verifies a Google Identity Services ID token server-side (signature,
+    // expiry, audience) for the "Sign in with Google" admin login path - see
+    // GoogleAuthService. No OAuth2 client/redirect flow needed: the frontend
+    // already obtains a signed ID token directly from Google.
+    implementation 'com.google.api-client:google-api-client:2.7.2'
     implementation 'org.apache.logging.log4j:log4j-layout-template-json'
 
     runtimeOnly 'org.postgresql:postgresql'

@@ -113,3 +113,12 @@ app:
     bootstrap-user:
       username: ${BOOTSTRAP_USERNAME:admin}
       password: ${BOOTSTRAP_PASSWORD:admin12345}
+  google-auth:
+    # Unset by default - "Sign in with Google" stays disabled (GoogleAuthService
+    # rejects every attempt with a clear "not configured" error) until both of
+    # these are set. Get a Client ID from a Google Cloud OAuth 2.0 "Web
+    # application" credential - see docs/development.md.
+    client-id: ${GOOGLE_OAUTH_CLIENT_ID:}
+    # Comma-separated. Only these exact Google account emails may sign in -
+    # and always as the one bootstrap admin account above, never as a new one.
+    allowed-emails: ${ADMIN_ALLOWED_GOOGLE_EMAILS:}

@@ -203,3 +203,36 @@ That means:
 * `controlplane` and `gateway` can read their bootstrap secrets from the persisted OpenBao state
 
 If the local secret state becomes confusing during development, reset the stack volumes and start fresh.
+
+## Google Sign-In Setup
+
+Optional. The admin login page (`http://localhost:3000/login` in dev) can
+show a "Sign in with Google" button alongside the existing username/password
+form - see `GOOGLE_OAUTH_CLIENT_ID`/`ADMIN_ALLOWED_GOOGLE_EMAILS` in
+[docs/environment-variables.md](environment-variables.md). This is not
+self-registration: a verified Google sign-in only ever logs in as the one
+existing bootstrap admin account, and only when its email is on the
+allowlist - it never creates a new account.
+
+To get a Client ID:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   create (or pick) a project, then **Create Credentials → OAuth client ID**.
+2. Application type: **Web application**.
+3. **Authorized JavaScript origins**: add `http://localhost:3000` for local
+   dev (and your real domain, e.g. `https://admin.example.com`, for
+   production). No redirect URI is needed - this uses Google Identity
+   Services' token flow, not an OAuth redirect.
+4. Copy the generated **Client ID** (looks like
+   `123456789-abc123.apps.googleusercontent.com`) - there is no client
+   secret to configure; ID-token verification only needs the Client ID.
+5. Set both in `.env` (see `.env.example`):
+   ```
+   GOOGLE_OAUTH_CLIENT_ID=123456789-abc123.apps.googleusercontent.com
+   ADMIN_ALLOWED_GOOGLE_EMAILS=you@gmail.com
+   ```
+6. Restart the stack. If the button still doesn't appear, remember
+   `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (the frontend's copy of the same value) is
+   baked in at *build* time for the production `web` image - rebuild it
+   rather than just restarting the container; the dev `web` service doesn't
+   have this limitation.

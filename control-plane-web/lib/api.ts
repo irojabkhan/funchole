@@ -106,6 +106,13 @@ export const api = {
     });
   },
 
+  loginWithGoogle(idToken: string): Promise<AuthTokenResponse> {
+    return request("/api/v1/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ idToken }),
+    });
+  },
+
   getProfile(): Promise<ProfileResponse> {
     return request("/api/v1/profile/me");
   },
