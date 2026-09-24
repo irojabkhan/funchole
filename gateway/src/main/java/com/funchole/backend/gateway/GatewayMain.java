@@ -8,6 +8,8 @@ import com.funchole.backend.gateway.acme.AcmeChallengeLookup;
 import com.funchole.backend.gateway.acme.AcmeChallengeServer;
 import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.SnapshotFlowResolver;
+import com.funchole.backend.gateway.server.FixedHostProxy;
+import com.funchole.backend.gateway.server.FixedHostProxy.ProxyTarget;
 import com.funchole.backend.gateway.server.GatewayHealthChecker;
 import com.funchole.backend.gateway.server.GatewayHttpHandler;
 import com.funchole.backend.gateway.server.GatewayInvocationCompletionListener;
@@ -23,6 +25,8 @@ import io.nats.client.Nats;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import javax.sql.DataSource;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -75,7 +79,8 @@ public final class GatewayMain {
                 pendingResponseRegistry,
                 invocationExecutor,
                 staticSiteCache,
-                new GatewayHealthChecker(dataSource, natsConnection)
+                new GatewayHealthChecker(dataSource, natsConnection),
+                loadFixedHostProxy()
         );
         GatewayServer gatewayServer = new GatewayServer(port, gatewayRegistry, gatewayHttpHandler);
         AcmeChallengeServer acmeChallengeServer = new AcmeChallengeServer(
@@ -199,6 +204,32 @@ public final class GatewayMain {
         } catch (Exception exception) {
             logger.warn("Gateway registry polling failed: {}", exception.getMessage());
         }
+    }
+
+    /**
+     * Optional, cloud product only - reverse-proxies a fixed hostname (the
+     * admin web app and/or the controlplane API) straight to its internal
+     * docker-network address instead of the normal AppDomain/Flow dispatch.
+     * Both pairs are independently optional; an unset {@code *_HOST}
+     * excludes that entry, and with neither set (the self-hosted default)
+     * this returns {@link FixedHostProxy#empty()} and the whole feature is
+     * inert. See docs/development.md before configuring this.
+     */
+    private static FixedHostProxy loadFixedHostProxy() {
+        Map<String, ProxyTarget> targetsByHostname = new HashMap<>();
+        addFixedHostProxyEntry(targetsByHostname, "ADMIN_WEB_PROXY_HOST", "ADMIN_WEB_PROXY_TARGET", "web:3000");
+        addFixedHostProxyEntry(targetsByHostname, "CONTROLPLANE_API_PROXY_HOST", "CONTROLPLANE_API_PROXY_TARGET", "controlplane:7080");
+        return new FixedHostProxy(targetsByHostname);
+    }
+
+    private static void addFixedHostProxyEntry(
+            Map<String, ProxyTarget> targetsByHostname, String hostEnvVar, String targetEnvVar, String defaultTarget
+    ) {
+        String hostname = readString(hostEnvVar, "");
+        if (hostname.isBlank()) {
+            return;
+        }
+        targetsByHostname.put(hostname.trim().toLowerCase(), ProxyTarget.parse(readString(targetEnvVar, defaultTarget)));
     }
 
     /**

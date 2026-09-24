@@ -8,6 +8,7 @@ import com.funchole.backend.gateway.GatewayRuntimeEntry;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.RouteMatch;
+import com.funchole.backend.gateway.server.FixedHostProxy.ProxyTarget;
 import com.funchole.backend.gateway.staticsite.StaticContentTypes;
 import com.funchole.backend.gateway.staticsite.StaticFileResolver;
 import com.funchole.backend.gateway.staticsite.StaticIndexHtml;
@@ -51,6 +52,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
     private final ExecutorService invocationExecutor;
     private final StaticSiteCache staticSiteCache;
     private final GatewayHealthChecker healthChecker;
+    private final FixedHostProxy fixedHostProxy;
 
     public GatewayHttpHandler(
             ObjectMapper objectMapper,
@@ -60,7 +62,8 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
             PendingInvocationResponseRegistry pendingResponseRegistry,
             ExecutorService invocationExecutor,
             StaticSiteCache staticSiteCache,
-            GatewayHealthChecker healthChecker
+            GatewayHealthChecker healthChecker,
+            FixedHostProxy fixedHostProxy
     ) {
         this.objectMapper = objectMapper;
         this.gatewayRegistry = gatewayRegistry;
@@ -70,6 +73,7 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
         this.invocationExecutor = invocationExecutor;
         this.staticSiteCache = staticSiteCache;
         this.healthChecker = healthChecker;
+        this.fixedHostProxy = fixedHostProxy;
     }
 
     @Override
@@ -102,6 +106,16 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
                     "success", false,
                     "message", "Host header is required"
             ));
+            return;
+        }
+
+        ProxyTarget proxyTarget = fixedHostProxy.targetFor(requestContext.hostname());
+        if (proxyTarget != null) {
+            // The admin web app / controlplane API: not an AppDomain/Flow at
+            // all (deliberately zero Flow rows - see FixedHostProxy), so
+            // this must run before the normal gatewayRegistry/flowResolver
+            // lookup below.
+            FixedHostProxyForwarder.forward(context, request, proxyTarget, requestContext.hostname());
             return;
         }
 

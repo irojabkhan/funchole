@@ -110,6 +110,12 @@ WORKDIR /workspace/web
 # simply doesn't render when this is unset (see app/login/page.tsx).
 ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
 ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+# Same build-time-only inlining as above - the public URL the browser calls
+# the controlplane API at (e.g. https://api-controlplane.funchole.dev in
+# production, behind the Gateway's fixed-host proxy). Defaults to the dev
+# value so an untouched build keeps working exactly as before.
+ARG NEXT_PUBLIC_CONTROLPLANE_URL="http://localhost:7080"
+ENV NEXT_PUBLIC_CONTROLPLANE_URL=${NEXT_PUBLIC_CONTROLPLANE_URL}
 COPY control-plane-web/package.json control-plane-web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY control-plane-web/ ./

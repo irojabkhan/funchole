@@ -70,8 +70,12 @@ services:
       timeout: 3s
       retries: 60
       start_period: 20s
-    ports:
-      - "7080:7080"
+    # No host port mapping: once ADMIN_WEB_PROXY_HOST/CONTROLPLANE_API_PROXY_HOST
+    # are configured on the gateway service below, the Gateway is the only
+    # public path to this API (real TLS, no plaintext HTTP exposure).
+    # Reachable internally on the docker network as controlplane:7080 for
+    # the Gateway's proxy, the web container's server-side calls, and this
+    # service's own healthcheck above.
     volumes:
       - openbao-data:/openbao:ro
     logging: *default-logging
@@ -99,6 +103,17 @@ services:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/gateway-token
       NATS_URL: nats://nats:4222
+      # Optional, cloud product only - reverse-proxies a fixed public
+      # hostname straight to the admin web app / controlplane API instead
+      # of the normal AppDomain/Flow dispatch, so both are reachable over
+      # real HTTPS on this same port 443 without a separate reverse proxy
+      # (Caddy/nginx/etc). Either, both, or neither may be set - unset
+      # (the self-hosted default) keeps this feature completely inert. See
+      # docs/development.md before configuring this.
+      ADMIN_WEB_PROXY_HOST: ${ADMIN_WEB_PROXY_HOST:-}
+      ADMIN_WEB_PROXY_TARGET: ${ADMIN_WEB_PROXY_TARGET:-web:3000}
+      CONTROLPLANE_API_PROXY_HOST: ${CONTROLPLANE_API_PROXY_HOST:-}
+      CONTROLPLANE_API_PROXY_TARGET: ${CONTROLPLANE_API_PROXY_TARGET:-controlplane:7080}
     healthcheck:
       test: ["CMD-SHELL", "curl -kfsS https://127.0.0.1:443/health >/dev/null 2>&1"]
       interval: 5s
@@ -240,11 +255,15 @@ services:
         # below - the Client ID isn't secret, so one env var is the source of
         # truth for both sides instead of two that could drift apart.
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+        # Build-time only (see Dockerfile) - must be a build arg, not a
+        # runtime `environment:` entry below, or it has no effect. The
+        # public URL the browser calls the controlplane API at, e.g.
+        # https://api-controlplane.funchole.dev once CONTROLPLANE_API_PROXY_HOST
+        # is configured on the gateway service. Defaults to the dev value.
+        NEXT_PUBLIC_CONTROLPLANE_URL: ${PUBLIC_CONTROLPLANE_URL:-http://localhost:7080}
     depends_on:
       controlplane:
         condition: service_healthy
-    environment:
-      NEXT_PUBLIC_CONTROLPLANE_URL: http://localhost:7080
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1"]
       interval: 10s

@@ -79,6 +79,13 @@ services:
       S3_ARTIFACT_SECRET_KEY: funchole-secret
       S3_ARTIFACT_REGION: us-east-1
       S3_ARTIFACT_PATH_STYLE_ACCESS: "true"
+      # Optional, cloud product only - see the same vars documented on the
+      # controlplane service above. Left unset in dev, where
+      # localhost:3000/localhost:7080 are already reachable directly.
+      ADMIN_WEB_PROXY_HOST: ${ADMIN_WEB_PROXY_HOST:-}
+      ADMIN_WEB_PROXY_TARGET: ${ADMIN_WEB_PROXY_TARGET:-web:3000}
+      CONTROLPLANE_API_PROXY_HOST: ${CONTROLPLANE_API_PROXY_HOST:-}
+      CONTROLPLANE_API_PROXY_TARGET: ${CONTROLPLANE_API_PROXY_TARGET:-controlplane:7080}
     ports:
       - "443:443"
     volumes:

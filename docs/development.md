@@ -281,3 +281,58 @@ for that user on that one limit key.
 Test this against an isolated stack, not the shared dev stack - enabling
 cloud mode changes sign-in behavior for every Google account, not just
 yours.
+
+## Admin Web / API Reverse Proxy Setup
+
+Optional, cloud product only. In production the Gateway already owns ports
+80/443 exclusively (it's single-instance - see `docs/limitations.md`), so
+`control-plane-web` (the admin UI, container port 3000) and `controlplane`
+(the REST/MCP API, container port 7080) need a way to be reachable over real
+HTTPS on those same ports without a second process fighting for them. Rather
+than add a separate reverse proxy (Caddy/nginx/Traefik), the Gateway itself
+reverse-proxies two fixed hostnames straight to those internal services -
+see `ADMIN_WEB_PROXY_HOST`/`CONTROLPLANE_API_PROXY_HOST` in
+[docs/environment-variables.md](environment-variables.md).
+
+Each hostname needs its own real `Gateway`/`AppDomain` row so it gets a TLS
+certificate through the normal cert-provisioning pipeline (self-signed by
+default, or Let's Encrypt once `CERTIFICATE_PROVIDER=LETS_ENCRYPT` is set) -
+**with zero Flows attached**, since these hostnames are never dispatched to
+a Function/Flow. A `Gateway`'s public hostname is always
+`<its unique_key>.<its AppDomain's domain_name>`, so:
+
+1. Create + verify one `AppDomain` for your base domain (e.g. `funchole.dev`)
+   through the normal domain-creation flow, exactly like step 2 of the Cloud
+   Packages setup above (or reuse that same verified domain if you already
+   have one).
+2. Create two `Gateway`s on that `AppDomain` (`create_gateway`, REST or MCP,
+   signed in as your admin account), leaving each one's Flows empty:
+   - `unique_key = "app"` -> serves `app.funchole.dev`
+   - `unique_key = "api-controlplane"` -> serves `api-controlplane.funchole.dev`
+3. Wait for (or check) both Gateways' certificates reaching `ACTIVE` status -
+   same as any tenant Gateway.
+4. Set in `.env` (see `.env.example`):
+   ```
+   ADMIN_WEB_PROXY_HOST=app.funchole.dev
+   CONTROLPLANE_API_PROXY_HOST=api-controlplane.funchole.dev
+   PUBLIC_CONTROLPLANE_URL=https://api-controlplane.funchole.dev
+   ```
+   `ADMIN_WEB_PROXY_TARGET`/`CONTROLPLANE_API_PROXY_TARGET` don't need
+   setting - they already default to `web:3000`/`controlplane:7080`, the
+   right docker-network addresses for `docker-compose.yml`.
+5. Rebuild and restart the stack (`PUBLIC_CONTROLPLANE_URL` is baked into
+   the `web` image at build time - a plain restart without `--build` won't
+   pick it up). `controlplane`'s port 7080 is no longer published to the
+   host at all once this is configured; the API is only reachable through
+   the Gateway's HTTPS, or from other containers on the docker network.
+
+Use whatever hostnames you actually want in production - `app.funchole.dev`/
+`api-controlplane.funchole.dev` above are this repo's own examples, not
+fixed values; only the `unique_key`s ("app"/"api-controlplane") need to
+match whatever `ADMIN_WEB_PROXY_HOST`/`CONTROLPLANE_API_PROXY_HOST` you set,
+since that's what determines each Gateway's served hostname together with
+its `AppDomain`.
+
+Test against an isolated stack first, same reasoning as Cloud Packages setup
+above - this changes how the one shared Gateway process routes traffic for
+every tenant on it.
