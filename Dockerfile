@@ -30,19 +30,24 @@ COPY runtime/src /workspace/runtime/src
 COPY docker /workspace/docker
 
 FROM build-base AS build-controlplane
-RUN --mount=type=cache,target=/root/.gradle \
+# id=gradle-controlplane: this stage builds concurrently with the other
+# build-* stages below (docker compose builds all services in parallel).
+# Without a distinct id, all of them would share one GRADLE_USER_HOME and
+# fight over Gradle's own journal-1.lock, causing "Timeout waiting to lock
+# journal cache" build failures.
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-controlplane \
     ./gradlew :controlplane:bootJar --no-daemon
 
 FROM build-base AS build-gateway
-RUN --mount=type=cache,target=/root/.gradle \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-gateway \
     ./gradlew :gateway:fatJar --no-daemon
 
 FROM build-base AS build-dispatcher
-RUN --mount=type=cache,target=/root/.gradle \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-dispatcher \
     ./gradlew :dispatcher:fatJar --no-daemon
 
 FROM build-base AS build-runtime
-RUN --mount=type=cache,target=/root/.gradle \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle-runtime \
     ./gradlew :runtime:fatJar --no-daemon
 
 FROM eclipse-temurin:25-jre AS runtime-base
