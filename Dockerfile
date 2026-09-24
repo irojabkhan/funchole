@@ -14,7 +14,7 @@ COPY runtime-registry/build.gradle /workspace/runtime-registry/build.gradle
 COPY dispatcher/build.gradle /workspace/dispatcher/build.gradle
 COPY runtime/build.gradle /workspace/runtime/build.gradle
 RUN chmod +x gradlew
-RUN --mount=type=cache,target=/root/.gradle \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle,sharing=locked \
     ./gradlew :controlplane:dependencies :gateway:dependencies :dispatcher:dependencies :runtime:dependencies --no-daemon >/dev/null 2>&1 || true
 
 COPY certificate/src /workspace/certificate/src
@@ -30,24 +30,28 @@ COPY runtime/src /workspace/runtime/src
 COPY docker /workspace/docker
 
 FROM build-base AS build-controlplane
-# id=gradle-controlplane: this stage builds concurrently with the other
+# id=gradle,sharing=locked: this stage builds concurrently with the other
 # build-* stages below (docker compose builds all services in parallel).
-# Without a distinct id, all of them would share one GRADLE_USER_HOME and
-# fight over Gradle's own journal-1.lock, causing "Timeout waiting to lock
-# journal cache" build failures.
-RUN --mount=type=cache,target=/root/.gradle,id=gradle-controlplane \
+# sharing=locked makes BuildKit serialize their access to the *same* cache
+# instead of letting them all touch it at once - the earlier fix of giving
+# each stage its own id avoided the lock contention but also gave each one
+# an empty cache, so all four had to redownload the whole Gradle
+# distribution concurrently and one connection died under the load. A
+# shared, lock-serialized cache keeps the warm distribution/dependency
+# downloads without the concurrent-writer race on Gradle's journal-1.lock.
+RUN --mount=type=cache,target=/root/.gradle,id=gradle,sharing=locked \
     ./gradlew :controlplane:bootJar --no-daemon
 
 FROM build-base AS build-gateway
-RUN --mount=type=cache,target=/root/.gradle,id=gradle-gateway \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle,sharing=locked \
     ./gradlew :gateway:fatJar --no-daemon
 
 FROM build-base AS build-dispatcher
-RUN --mount=type=cache,target=/root/.gradle,id=gradle-dispatcher \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle,sharing=locked \
     ./gradlew :dispatcher:fatJar --no-daemon
 
 FROM build-base AS build-runtime
-RUN --mount=type=cache,target=/root/.gradle,id=gradle-runtime \
+RUN --mount=type=cache,target=/root/.gradle,id=gradle,sharing=locked \
     ./gradlew :runtime:fatJar --no-daemon
 
 FROM eclipse-temurin:25-jre AS runtime-base
