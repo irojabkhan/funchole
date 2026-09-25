@@ -3,9 +3,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Pagination } from "@/components/Pagination";
 import { StatusBadge } from "@/components/StatusBadge";
-import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
-import { inputClass } from "@/components/Input";
+import { CreatePanel } from "@/components/CreatePanel";
+import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { ResourceList, ResourceListState } from "@/components/ResourceList";
 import { PlusIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type { DomainResponse, PaginationResponse } from "@/lib/types";
@@ -66,25 +68,31 @@ export default function DomainsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Domains</h1>
-        <p className="mt-1 text-sm text-muted">Register a domain, then start verification to prove ownership.</p>
-      </div>
+      <PageHeader
+        eyebrow="Operate"
+        title="Custom Domains"
+        description="Register and verify the domains you want customers to use."
+      />
 
-      <form onSubmit={handleCreate} className={`${panelClass} flex flex-wrap items-start gap-3 p-4`}>
-        <input
-          type="text"
-          required
-          placeholder="example.com"
-          value={domainName}
-          onChange={(e) => setDomainName(e.target.value)}
-          className={`${inputClass} min-w-56 flex-1`}
-        />
-        <Button type="submit" variant="primary" disabled={busy}>
-          <PlusIcon className="h-4 w-4" />
-          Add domain
-        </Button>
-      </form>
+      <CreatePanel title="Add domain" description="Use the bare domain only, for example example.com. Verification creates the TXT challenge.">
+        <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3">
+          <label className={`${fieldClass} min-w-56 flex-1`}>
+            <span className={labelClass}>Domain name</span>
+            <input
+              type="text"
+              required
+              placeholder="example.com"
+              value={domainName}
+              onChange={(e) => setDomainName(e.target.value)}
+              className={`${inputClass} font-mono`}
+            />
+          </label>
+          <Button type="submit" variant="primary" disabled={busy}>
+            <PlusIcon className="h-4 w-4" />
+            Add domain
+          </Button>
+        </form>
+      </CreatePanel>
 
       {error && (
         <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
@@ -92,52 +100,31 @@ export default function DomainsPage() {
         </p>
       )}
 
-      <Panel className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <th className="px-4 py-3 font-medium">Domain</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Verification code</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!domains && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {domains?.items.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                  No domains yet. Add one above.
-                </td>
-              </tr>
-            )}
-            {domains?.items.map((domain) => (
-              <tr key={domain.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                <td className="px-4 py-3 font-medium text-foreground">{domain.domainName}</td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={domain.status} />
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-muted">
-                  {domain.verificationCode ?? "—"}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {domain.status === "PENDING" && (
-                    <Button variant="secondary" size="sm" onClick={() => handleVerify(domain)}>
-                      Verify
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      <ResourceList title="Domain registry" description="Verified domains can be used for public entry points and certificates.">
+        {!domains && <ResourceListState>Loading domains…</ResourceListState>}
+        {domains?.items.length === 0 && <ResourceListState>No domains yet. Add one above to begin public URL setup.</ResourceListState>}
+        {domains?.items.map((domain) => (
+          <div key={domain.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-accent-soft lg:grid-cols-[1fr_auto]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="font-mono text-base font-bold text-foreground">{domain.domainName}</code>
+                <StatusBadge status={domain.status} />
+              </div>
+              <p className="mt-2 text-xs text-muted">Verification TXT</p>
+              <code className="mt-1 block break-all rounded-2xl border border-border bg-surface-2 px-3 py-2 font-mono text-xs text-muted-strong">
+                {domain.verificationCode ?? "No challenge generated yet"}
+              </code>
+            </div>
+            <div className="flex items-center gap-2 lg:justify-end">
+              {domain.status === "PENDING" && (
+                <Button variant="secondary" size="sm" onClick={() => handleVerify(domain)}>
+                  Verify DNS
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </ResourceList>
 
       {domains && (
         <Pagination

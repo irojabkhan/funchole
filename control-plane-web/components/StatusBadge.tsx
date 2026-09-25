@@ -1,24 +1,25 @@
 const STATUS_STYLES: Record<string, string> = {
-  ACTIVE: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
-  VERIFIED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
-  ADOPTED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
-  READY: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
-  COMPLETED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
-  PENDING: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
-  DRAFT: "bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
-  PUBLISHING: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400",
-  FAILED: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
-  REJECTED: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
-  EXPIRED: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
-  ARCHIVED: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
-  INACTIVE: "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400",
+  ACTIVE: "border-success/30 bg-success/10 text-success",
+  VERIFIED: "border-success/30 bg-success/10 text-success",
+  ADOPTED: "border-success/30 bg-success/10 text-success",
+  READY: "border-success/30 bg-success/10 text-success",
+  COMPLETED: "border-success/30 bg-success/10 text-success",
+  PENDING: "border-accent-border bg-accent-soft text-accent",
+  DRAFT: "border-accent-border bg-accent-soft text-accent",
+  PUBLISHING: "border-info/30 bg-info/10 text-info",
+  FAILED: "border-danger/30 bg-danger/10 text-danger",
+  REVOKED: "border-danger/30 bg-danger/10 text-danger",
+  REJECTED: "border-danger/30 bg-danger/10 text-danger",
+  EXPIRED: "border-danger/30 bg-danger/10 text-danger",
+  ARCHIVED: "border-violet/30 bg-violet/10 text-violet",
+  INACTIVE: "border-border bg-surface-hover text-muted",
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? "bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+  const style = STATUS_STYLES[status] ?? "border-border bg-surface-hover text-muted";
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${style}`}
+      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${style}`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {status}

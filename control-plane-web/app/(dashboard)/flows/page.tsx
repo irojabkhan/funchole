@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { Pagination } from "@/components/Pagination";
 import { StatusBadge } from "@/components/StatusBadge";
-import { panelClass, Panel } from "@/components/Panel";
 import { Button, buttonClasses } from "@/components/Button";
+import { CreatePanel } from "@/components/CreatePanel";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { ResourceList, ResourceListState } from "@/components/ResourceList";
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type { FlowResponse, GatewayResponse, PaginationResponse } from "@/lib/types";
@@ -115,122 +117,123 @@ export default function FlowsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Flows</h1>
-          <p className="mt-1 text-sm text-muted">
-            A flow maps a route on a gateway to an ordered chain of steps.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Build"
+        title="Workflows"
+        description="Customer-facing paths that connect a request to the right actions."
+        actions={
         <Button variant="primary" onClick={openCreate} disabled={gateways.length === 0}>
           <PlusIcon className="h-4 w-4" />
-          New flow
+          New workflow
         </Button>
-      </div>
+        }
+      />
 
       {gateways.length === 0 && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-          You need at least one gateway before creating a flow.
+        <p className="rounded-2xl border border-accent-border bg-accent-soft px-4 py-3 text-sm text-accent">
+          You need at least one entry point before creating a workflow.
         </p>
       )}
 
       {form && (
-        <form onSubmit={handleSubmit} className={`${panelClass} grid gap-4 p-4 sm:grid-cols-2`}>
-          <label className={fieldClass}>
-            <span className={labelClass}>Flow key</span>
-            <input
-              type="text"
-              required
-              maxLength={150}
-              placeholder="flw_orders_list"
-              pattern="[a-zA-Z0-9_.\-]+"
-              value={form.flowKey}
-              onChange={(e) => setForm({ ...form, flowKey: e.target.value })}
-              className={`${inputClass} font-mono`}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Name</span>
-            <input
-              type="text"
-              required
-              maxLength={255}
-              placeholder="Orders List"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={`${fieldClass} sm:col-span-2`}>
-            <span className={labelClass}>Description</span>
-            <input
-              type="text"
-              maxLength={1000}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Gateway</span>
-            <select
-              required
-              value={form.gatewayId}
-              onChange={(e) => setForm({ ...form, gatewayId: e.target.value })}
-              className={inputClass}
-            >
-              {gateways.map((gateway) => (
-                <option key={gateway.id} value={gateway.id}>
-                  {gateway.name} ({gateway.uniqueKey}.{gateway.domainName})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="grid grid-cols-3 gap-3">
+        <CreatePanel title="New workflow" description="Choose the public method and path this workflow should answer.">
+          <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
             <label className={fieldClass}>
-              <span className={labelClass}>Method</span>
+              <span className={labelClass}>Workflow key</span>
+              <input
+                type="text"
+                required
+                maxLength={150}
+                placeholder="flw_orders_list"
+                pattern="[a-zA-Z0-9_.\-]+"
+                value={form.flowKey}
+                onChange={(e) => setForm({ ...form, flowKey: e.target.value })}
+                className={`${inputClass} font-mono`}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Name</span>
+              <input
+                type="text"
+                required
+                maxLength={255}
+                placeholder="Orders List"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={`${fieldClass} sm:col-span-2`}>
+              <span className={labelClass}>Description</span>
+              <input
+                type="text"
+                maxLength={1000}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Entry point</span>
               <select
-                value={form.httpMethod}
-                onChange={(e) => setForm({ ...form, httpMethod: e.target.value })}
+                required
+                value={form.gatewayId}
+                onChange={(e) => setForm({ ...form, gatewayId: e.target.value })}
                 className={inputClass}
               >
-                {HTTP_METHODS.map((method) => (
-                  <option key={method} value={method}>
-                    {method}
+                {gateways.map((gateway) => (
+                  <option key={gateway.id} value={gateway.id}>
+                    {gateway.name} ({gateway.uniqueKey}.{gateway.domainName})
                   </option>
                 ))}
               </select>
             </label>
-            <label className={`${fieldClass} col-span-2`}>
-              <span className={labelClass}>Path</span>
+            <div className="grid grid-cols-3 gap-3">
+              <label className={fieldClass}>
+                <span className={labelClass}>Method</span>
+                <select
+                  value={form.httpMethod}
+                  onChange={(e) => setForm({ ...form, httpMethod: e.target.value })}
+                  className={inputClass}
+                >
+                  {HTTP_METHODS.map((method) => (
+                    <option key={method} value={method}>
+                      {method}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`${fieldClass} col-span-2`}>
+                <span className={labelClass}>Path</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="/orders"
+                  value={form.path}
+                  onChange={(e) => setForm({ ...form, path: e.target.value })}
+                  className={`${inputClass} font-mono`}
+                />
+              </label>
+            </div>
+            <label className={fieldClass}>
+              <span className={labelClass}>Priority</span>
               <input
-                type="text"
-                required
-                placeholder="/orders"
-                value={form.path}
-                onChange={(e) => setForm({ ...form, path: e.target.value })}
-                className={`${inputClass} font-mono`}
+                type="number"
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                className={inputClass}
               />
             </label>
-          </div>
-          <label className={fieldClass}>
-            <span className={labelClass}>Priority</span>
-            <input
-              type="number"
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" variant="primary" disabled={busy}>
-              Create flow
-            </Button>
-            <Button type="button" variant="secondary" onClick={closeForm}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit" variant="primary" disabled={busy}>
+                Create workflow
+              </Button>
+              <Button type="button" variant="secondary" onClick={closeForm}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CreatePanel>
       )}
 
       {error && (
@@ -239,66 +242,37 @@ export default function FlowsPage() {
         </p>
       )}
 
-      <Panel className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Route</th>
-              <th className="px-4 py-3 font-medium">Gateway</th>
-              <th className="px-4 py-3 font-medium">Active version</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!flows && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {flows?.items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  No flows yet.
-                </td>
-              </tr>
-            )}
-            {flows?.items.map((flow) => (
-              <tr key={flow.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                <td className="px-4 py-3">
-                  <Link href={`/flows/${flow.id}`} className="font-medium text-foreground hover:text-cyan-600 dark:hover:text-cyan-400">
-                    {flow.name}
-                  </Link>
-                  <p className="font-mono text-xs text-muted">{flow.flowKey}</p>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-muted">
-                  <span className="text-cyan-600 dark:text-cyan-400">{flow.httpMethod}</span> {flow.path}
-                </td>
-                <td className="px-4 py-3 text-muted">{flow.gatewayName}</td>
-                <td className="px-4 py-3">
-                  {flow.activeFlowVersionStatus ? (
-                    <StatusBadge status={flow.activeFlowVersionStatus} />
-                  ) : (
-                    <span className="text-xs text-muted">No adopted version</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Link href={`/flows/${flow.id}`} className={buttonClasses("secondary", "sm")}>
-                      Open
-                    </Link>
-                    <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(flow)}>
-                      <TrashIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      <ResourceList title="Workflow catalog" description="Each workflow owns one public path and becomes live after publishing.">
+        {!flows && <ResourceListState>Loading workflows…</ResourceListState>}
+        {flows?.items.length === 0 && <ResourceListState>No workflows yet. Create one after an entry point exists.</ResourceListState>}
+        {flows?.items.map((flow) => (
+          <div key={flow.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-accent-soft xl:grid-cols-[1fr_auto]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full border border-accent-border bg-accent-soft px-2.5 py-1 font-mono text-xs font-bold text-accent">{flow.httpMethod}</span>
+                <code className="truncate font-mono text-sm text-foreground">{flow.path}</code>
+                {flow.activeFlowVersionStatus ? <StatusBadge status={flow.activeFlowVersionStatus} /> : <StatusBadge status="DRAFT" />}
+              </div>
+              <Link href={`/flows/${flow.id}`} className="mt-3 block text-base font-bold text-foreground hover:text-accent">
+                {flow.name}
+              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                <code className="rounded-full border border-border bg-surface-2 px-2.5 py-1 font-mono">{flow.flowKey}</code>
+                <span>Entry point: {flow.gatewayName}</span>
+                <span>Priority: {flow.priority}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 xl:justify-end">
+              <Link href={`/flows/${flow.id}`} className={buttonClasses("secondary", "sm")}>
+                Open workflow
+              </Link>
+              <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(flow)}>
+                <TrashIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </ResourceList>
 
       {flows && (
         <Pagination

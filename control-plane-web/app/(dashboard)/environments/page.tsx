@@ -2,9 +2,12 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Pagination } from "@/components/Pagination";
-import { panelClass, Panel } from "@/components/Panel";
+import { Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
+import { CreatePanel } from "@/components/CreatePanel";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { ResourceList, ResourceListState } from "@/components/ResourceList";
 import { KeyIcon, PencilIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type {
@@ -121,7 +124,7 @@ export default function EnvironmentsPage() {
   }
 
   async function handleDelete(environment: EnvironmentProfileResponse) {
-    if (!window.confirm(`Delete environment "${environment.name}"? Flows attached to it will stop inheriting these values.`)) {
+    if (!window.confirm(`Delete variable set "${environment.name}"? Anything using it will stop inheriting these values.`)) {
       return;
     }
     setError(null);
@@ -153,66 +156,67 @@ export default function EnvironmentsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Environments</h1>
-          <p className="mt-1 text-sm text-muted">
-            Create shared production or testing variables/secrets once, then attach them to a Flow so every step inherits them.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Configure"
+        title="Variables & Secrets"
+        description="Shared configuration for production, staging, testing, and agent-created work."
+        actions={
         <Button variant="primary" onClick={openCreate}>
           <PlusIcon className="h-4 w-4" />
-          New environment
+          New variable set
         </Button>
-      </div>
+        }
+      />
 
       {form && (
-        <form onSubmit={handleSubmit} className={`${panelClass} grid gap-4 p-4 sm:grid-cols-2`}>
-          <label className={fieldClass}>
-            <span className={labelClass}>Environment key</span>
-            <input
-              type="text"
-              required
-              maxLength={150}
-              disabled={form.id !== null}
-              placeholder="production"
-              pattern="[a-zA-Z0-9_.\-]+"
-              value={form.environmentKey}
-              onChange={(e) => setForm({ ...form, environmentKey: e.target.value })}
-              className={`${inputClass} font-mono disabled:opacity-50`}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Name</span>
-            <input
-              type="text"
-              required
-              maxLength={255}
-              placeholder="Production"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={`${fieldClass} sm:col-span-2`}>
-            <span className={labelClass}>Description</span>
-            <input
-              type="text"
-              maxLength={1000}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" variant="primary" disabled={busy}>
-              {form.id ? "Save changes" : "Create environment"}
-            </Button>
-            <Button type="button" variant="secondary" onClick={closeForm}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+        <CreatePanel title={form.id ? "Edit variable set" : "New variable set"} description="Create a named profile for shared configuration. Secrets are stored protected and only references are shown later.">
+          <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+            <label className={fieldClass}>
+              <span className={labelClass}>Variable set key</span>
+              <input
+                type="text"
+                required
+                maxLength={150}
+                disabled={form.id !== null}
+                placeholder="production"
+                pattern="[a-zA-Z0-9_.\-]+"
+                value={form.environmentKey}
+                onChange={(e) => setForm({ ...form, environmentKey: e.target.value })}
+                className={`${inputClass} font-mono disabled:opacity-50`}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Name</span>
+              <input
+                type="text"
+                required
+                maxLength={255}
+                placeholder="Production"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={`${fieldClass} sm:col-span-2`}>
+              <span className={labelClass}>Description</span>
+              <input
+                type="text"
+                maxLength={1000}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit" variant="primary" disabled={busy}>
+                {form.id ? "Save changes" : "Create variable set"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={closeForm}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CreatePanel>
       )}
 
       {error && (
@@ -222,70 +226,42 @@ export default function EnvironmentsPage() {
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
-        <Panel className="overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-muted">
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-4 py-3 font-medium">Key</th>
-                <th className="px-4 py-3 font-medium">Created</th>
-                <th className="px-4 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!environments && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                    Loading…
-                  </td>
-                </tr>
-              )}
-              {environments?.items.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                    No environments yet.
-                  </td>
-                </tr>
-              )}
-              {environments?.items.map((environment) => (
-                <tr
-                  key={environment.id}
-                  className={`border-b border-border last:border-0 hover:bg-surface-hover ${
-                    selected?.id === environment.id ? "bg-cyan-500/5" : ""
-                  }`}
-                >
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setConfig(null);
-                        setSelected(environment);
-                      }}
-                      className="text-left font-medium text-foreground hover:text-cyan-600 dark:hover:text-cyan-400"
-                    >
-                      {environment.name}
-                    </button>
-                    {environment.description && (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-muted">{environment.description}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted">{environment.environmentKey}</td>
-                  <td className="px-4 py-3 text-muted">{new Date(environment.createdAt).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="secondary" size="icon" title="Edit" onClick={() => openEdit(environment)}>
-                        <PencilIcon className="h-4 w-4" />
-                      </Button>
-                      <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(environment)}>
-                        <TrashIcon className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
+        <ResourceList title="Variable sets" description="Select a set to manage variables and secrets.">
+          {!environments && <ResourceListState>Loading variable sets…</ResourceListState>}
+          {environments?.items.length === 0 && <ResourceListState>No variable sets yet. Create one for production, staging, or testing context.</ResourceListState>}
+          {environments?.items.map((environment) => (
+            <div
+              key={environment.id}
+              className={`grid gap-4 px-5 py-4 transition-colors hover:bg-accent-soft lg:grid-cols-[1fr_auto] ${
+                selected?.id === environment.id ? "bg-accent-soft" : ""
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setConfig(null);
+                  setSelected(environment);
+                }}
+                className="min-w-0 text-left"
+              >
+                <p className="text-base font-bold text-foreground hover:text-accent">{environment.name}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <code className="rounded-full border border-border bg-surface-2 px-2.5 py-1 font-mono text-xs text-muted-strong">{environment.environmentKey}</code>
+                  <span className="text-xs text-muted">Created {new Date(environment.createdAt).toLocaleString()}</span>
+                </div>
+                {environment.description && <p className="mt-2 line-clamp-1 text-sm text-muted">{environment.description}</p>}
+              </button>
+              <div className="flex items-center gap-2 lg:justify-end">
+                <Button variant="secondary" size="icon" title="Edit" onClick={() => openEdit(environment)}>
+                  <PencilIcon className="h-4 w-4" />
+                </Button>
+                <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(environment)}>
+                  <TrashIcon className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </ResourceList>
 
         <EnvironmentConfigPanel selected={selected} config={config} onSave={saveConfig} />
       </div>
@@ -315,7 +291,7 @@ function EnvironmentConfigPanel({ selected, config, onSave }: EnvironmentConfigP
         <KeyIcon className="h-8 w-8 text-muted" />
         <p className="text-sm font-medium text-foreground">Select an environment</p>
         <p className="max-w-xs text-xs text-muted">
-          Choose a profile to manage shared variables and secrets for Flow inheritance.
+          Choose a set to manage shared variables and secrets.
         </p>
       </Panel>
     );

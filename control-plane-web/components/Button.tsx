@@ -5,11 +5,11 @@ export type ButtonSize = "md" | "sm" | "icon";
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-cyan-600 text-white hover:bg-cyan-500 dark:bg-cyan-500 dark:text-slate-950 dark:hover:bg-cyan-400",
+    "bg-accent text-accent-ink shadow-[0_0_0_1px_rgba(245,166,35,0.18),0_10px_30px_rgba(245,166,35,0.16)] hover:bg-accent-hover",
   secondary:
-    "border border-border bg-surface text-foreground hover:bg-surface-hover",
+    "border border-border bg-surface/80 text-foreground hover:border-accent-border hover:bg-accent-soft",
   danger:
-    "border border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-900/60 dark:text-rose-400 dark:hover:bg-rose-950/40",
+    "border border-danger/35 bg-danger/10 text-danger hover:bg-danger/15",
   ghost: "text-muted hover:bg-surface-hover hover:text-foreground",
 };
 
@@ -20,7 +20,7 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 };
 
 export function buttonClasses(variant: ButtonVariant = "secondary", size: ButtonSize = "md") {
-  return `inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]}`;
+  return `inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl font-medium transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]}`;
 }
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

@@ -3,9 +3,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Pagination } from "@/components/Pagination";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Panel, panelClass } from "@/components/Panel";
 import { Button } from "@/components/Button";
+import { CreatePanel } from "@/components/CreatePanel";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { ResourceList, ResourceListState } from "@/components/ResourceList";
 import { PlusIcon, PencilIcon, TrashIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type {
@@ -129,81 +131,84 @@ export default function GatewaysPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Gateways</h1>
-          <p className="mt-1 text-sm text-muted">Each gateway gets a unique key under a verified domain.</p>
-        </div>
+      <PageHeader
+        eyebrow="Operate"
+        title="Entry Points"
+        description="Public hosts with certificates. An entry point becomes the stable hostname for customer-facing workflows."
+        actions={
         <Button variant="primary" onClick={openCreate} disabled={domains.length === 0}>
           <PlusIcon className="h-4 w-4" />
-          New gateway
+          New entry point
         </Button>
-      </div>
+        }
+      />
 
       {domains.length === 0 && (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-          You need at least one verified domain before creating a gateway.
+        <p className="rounded-2xl border border-accent-border bg-accent-soft px-4 py-3 text-sm text-accent">
+          You need at least one verified domain before creating an entry point.
         </p>
       )}
 
       {form && (
-        <form onSubmit={handleSubmit} className={`${panelClass} grid gap-4 p-4 sm:grid-cols-2`}>
-          <label className={fieldClass}>
-            <span className={labelClass}>Name</span>
-            <input
-              type="text"
-              required
-              maxLength={100}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Description</span>
-            <input
-              type="text"
-              maxLength={1000}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Domain</span>
-            <select
-              required
-              value={form.appDomainId}
-              onChange={(e) => setForm({ ...form, appDomainId: e.target.value })}
-              className={inputClass}
-            >
-              {domains.map((domain) => (
-                <option key={domain.id} value={domain.id}>
-                  {domain.domainName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Status</span>
-            <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value as GatewayStatus })}
-              className={inputClass}
-            >
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="INACTIVE">INACTIVE</option>
-            </select>
-          </label>
-          <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" variant="primary" disabled={busy}>
-              {editingId ? "Save changes" : "Create gateway"}
-            </Button>
-            <Button type="button" variant="secondary" onClick={closeForm}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+        <CreatePanel title={editingId ? "Edit entry point" : "New entry point"} description="Choose a verified domain. FuncHole generates the unique host key and certificate metadata.">
+          <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+            <label className={fieldClass}>
+              <span className={labelClass}>Name</span>
+              <input
+                type="text"
+                required
+                maxLength={100}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Description</span>
+              <input
+                type="text"
+                maxLength={1000}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Domain</span>
+              <select
+                required
+                value={form.appDomainId}
+                onChange={(e) => setForm({ ...form, appDomainId: e.target.value })}
+                className={inputClass}
+              >
+                {domains.map((domain) => (
+                  <option key={domain.id} value={domain.id}>
+                    {domain.domainName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Status</span>
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value as GatewayStatus })}
+                className={inputClass}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">INACTIVE</option>
+              </select>
+            </label>
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit" variant="primary" disabled={busy}>
+              {editingId ? "Save changes" : "Create entry point"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={closeForm}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CreatePanel>
       )}
 
       {error && (
@@ -212,66 +217,34 @@ export default function GatewaysPage() {
         </p>
       )}
 
-      <Panel className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Host</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Certificate</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!gateways && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {gateways?.items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                  No gateways yet.
-                </td>
-              </tr>
-            )}
-            {gateways?.items.map((gateway) => (
-              <tr key={gateway.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                <td className="px-4 py-3">
-                  <p className="font-medium text-foreground">{gateway.name}</p>
-                  {gateway.description && <p className="text-xs text-muted">{gateway.description}</p>}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs text-muted">
-                  {gateway.uniqueKey}.{gateway.domainName}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={gateway.status} />
-                </td>
-                <td className="px-4 py-3">
-                  {gateway.certificate ? (
-                    <StatusBadge status={gateway.certificate.status} />
-                  ) : (
-                    <span className="text-xs text-muted">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="icon" title="Edit" onClick={() => openEdit(gateway)}>
-                      <PencilIcon className="h-4 w-4" />
-                    </Button>
-                    <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(gateway)}>
-                      <TrashIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      <ResourceList title="Entry point registry" description="Hosts available for live workflows and certificate-backed traffic.">
+        {!gateways && <ResourceListState>Loading entry points…</ResourceListState>}
+        {gateways?.items.length === 0 && <ResourceListState>No entry points yet. Add a verified domain first, then create a public host.</ResourceListState>}
+        {gateways?.items.map((gateway) => (
+          <div key={gateway.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-accent-soft lg:grid-cols-[1fr_auto]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-base font-bold text-foreground">{gateway.name}</p>
+                <StatusBadge status={gateway.status} />
+                {gateway.certificate ? <StatusBadge status={gateway.certificate.status} /> : <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted">No certificate</span>}
+              </div>
+              <code className="mt-3 block truncate font-mono text-sm text-accent">
+                {gateway.uniqueKey}.{gateway.domainName}
+              </code>
+              {gateway.description && <p className="mt-2 text-sm leading-6 text-muted">{gateway.description}</p>}
+            </div>
+            <div className="flex items-center gap-2 lg:justify-end">
+              <Button variant="secondary" size="sm" onClick={() => openEdit(gateway)}>
+                <PencilIcon className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+              <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(gateway)}>
+                <TrashIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </ResourceList>
 
       {gateways && (
         <Pagination

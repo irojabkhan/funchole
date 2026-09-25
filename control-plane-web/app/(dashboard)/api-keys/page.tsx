@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
+import { CreatePanel } from "@/components/CreatePanel";
 import { Modal } from "@/components/Modal";
 import { CopyableCommand } from "@/components/CopyableCommand";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { ResourceList, ResourceListState } from "@/components/ResourceList";
+import { StatusBadge } from "@/components/StatusBadge";
 import { PlusIcon, TrashIcon, AnthropicIcon, OpenAIIcon, OpencodeIcon } from "@/components/icons";
 import { api, ApiError, API_BASE_URL, APP_URL } from "@/lib/api";
 import type { ApiKeyResponse } from "@/lib/types";
@@ -102,20 +105,17 @@ export default function ApiKeysPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">MCP API Keys</h1>
-          <p className="mt-1 text-sm text-muted">
-            Long-lived credentials for machine clients - point your MCP-compatible coding agent at{" "}
-            <code className="rounded bg-surface-hover px-1 py-0.5 font-mono text-xs">/api/mcp</code> with one of
-            these as its bearer token.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Configure"
+        title="Agent Access"
+        description="Credentials for coding agents. Create one key, copy the generated command, and keep the dashboard for manual oversight."
+        actions={
         <Button variant="primary" onClick={() => setCreating(true)}>
           <PlusIcon className="h-4 w-4" />
           New API key
         </Button>
-      </div>
+        }
+      />
 
       {revealedKey && (
         <Modal title="Connect your coding agent" onClose={() => setRevealedKey(null)} widthClassName="max-w-xl">
@@ -148,26 +148,28 @@ export default function ApiKeysPage() {
       )}
 
       {creating && (
-        <form onSubmit={handleCreate} className={`${panelClass} flex flex-wrap items-end gap-3 p-4`}>
-          <label className={`${fieldClass} flex-1`}>
-            <span className={labelClass}>Name</span>
-            <input
-              type="text"
-              required
-              maxLength={150}
-              placeholder="My coding agent"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputClass}
-            />
-          </label>
-          <Button type="submit" variant="primary" disabled={busy}>
-            Create
-          </Button>
-          <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
-            Cancel
-          </Button>
-        </form>
+        <CreatePanel title="Create agent key" description="Name the agent or environment that will use this key. The raw token is shown once.">
+          <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3">
+            <label className={`${fieldClass} min-w-64 flex-1`}>
+              <span className={labelClass}>Name</span>
+              <input
+                type="text"
+                required
+                maxLength={150}
+                placeholder="My coding agent"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+            <Button type="submit" variant="primary" disabled={busy}>
+              Create
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+          </form>
+        </CreatePanel>
       )}
 
       {error && (
@@ -176,60 +178,32 @@ export default function ApiKeysPage() {
         </p>
       )}
 
-      <Panel className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Key</th>
-              <th className="px-4 py-3 font-medium">Created</th>
-              <th className="px-4 py-3 font-medium">Last used</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!keys && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {keys?.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted">
-                  No API keys yet.
-                </td>
-              </tr>
-            )}
-            {keys?.map((key) => (
-              <tr key={key.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                <td className="px-4 py-3 font-medium text-foreground">{key.name}</td>
-                <td className="px-4 py-3 font-mono text-xs text-muted">{key.keyPrefix}…</td>
-                <td className="px-4 py-3 text-muted">{new Date(key.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-3 text-muted">
-                  {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : "Never"}
-                </td>
-                <td className="px-4 py-3">
-                  {key.revokedAt ? (
-                    <span className="text-rose-600 dark:text-rose-400">Revoked</span>
-                  ) : (
-                    <span className="text-emerald-600 dark:text-emerald-400">Active</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {!key.revokedAt && (
-                    <Button variant="danger" size="icon" title="Revoke" onClick={() => handleRevoke(key)}>
-                      <TrashIcon className="h-4 w-4" />
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      <ResourceList title="Agent credentials" description={`Connection endpoint: ${MCP_URL}`}>
+        {!keys && <ResourceListState>Loading agent keys…</ResourceListState>}
+        {keys?.length === 0 && <ResourceListState>No agent keys yet. Create one to connect a coding agent.</ResourceListState>}
+        {keys?.map((key) => (
+          <div key={key.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-accent-soft lg:grid-cols-[1fr_auto]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-base font-bold text-foreground">{key.name}</p>
+                <StatusBadge status={key.revokedAt ? "REVOKED" : "ACTIVE"} />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                <code className="rounded-full border border-border bg-surface-2 px-2.5 py-1 font-mono">{key.keyPrefix}…</code>
+                <span>Created {new Date(key.createdAt).toLocaleString()}</span>
+                <span>Last used {key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : "never"}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 lg:justify-end">
+              {!key.revokedAt && (
+                <Button variant="danger" size="icon" title="Revoke" onClick={() => handleRevoke(key)}>
+                  <TrashIcon className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </ResourceList>
     </div>
   );
 }

@@ -23,7 +23,7 @@ export function Modal({ title, onClose, children, widthClassName = "max-w-lg" }:
   return (
     <div
       role="presentation"
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 px-4 py-10 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 px-4 py-10 backdrop-blur-md"
       onClick={onClose}
     >
       <div
@@ -31,7 +31,7 @@ export function Modal({ title, onClose, children, widthClassName = "max-w-lg" }:
         aria-modal="true"
         aria-label={title}
         onClick={(event) => event.stopPropagation()}
-        className={`${panelClass} w-full ${widthClassName} shadow-xl`}
+        className={`${panelClass} w-full ${widthClassName} fh-reveal shadow-2xl`}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-base font-semibold text-foreground">{title}</h2>

@@ -9,6 +9,8 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { FunctionLifecycleDiagram } from "@/components/FunctionLifecycleDiagram";
+import { LogTraceConsole } from "@/components/LogTraceConsole";
 import {
   codeSyntaxColorsDark,
   codeSyntaxColorsLight,
@@ -17,14 +19,12 @@ import {
   languageForPath,
   useIsDarkMode,
 } from "@/components/CodeEditor";
-import { OutputLog } from "@/components/OutputLog";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
   UploadIcon,
   PlayIcon,
   ZapIcon,
-  CheckIcon,
   KeyIcon,
   DatabaseIcon,
   PlusIcon,
@@ -128,7 +128,7 @@ export default function FunctionVersionDetailPage() {
           Functions
         </Link>
         <ChevronRightIcon className="h-3.5 w-3.5" />
-        <Link href={`/functions/${functionId}`} className="font-medium text-foreground hover:text-cyan-600 dark:hover:text-cyan-400">
+        <Link href={`/functions/${functionId}`} className="font-medium text-foreground hover:text-accent">
           {fn.name}
         </Link>
         <ChevronRightIcon className="h-3.5 w-3.5" />
@@ -160,10 +160,10 @@ export default function FunctionVersionDetailPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+        <div className="rounded-2xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           <p role="alert">{error}</p>
           {deployErrorDetails && (
-            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-rose-100/60 p-2 font-mono text-xs dark:bg-black/30">
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-black/30 p-2 font-mono text-xs">
               {deployErrorDetails.join("\n")}
             </pre>
           )}
@@ -171,11 +171,13 @@ export default function FunctionVersionDetailPage() {
       )}
 
       {version.status === "FAILED" && !deployErrorDetails && (
-        <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+        <p className="rounded-2xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           This version failed to build. Build output isn&apos;t persisted, so it&apos;s only shown right after a deploy
           attempt in this session. Create a new draft version to try again.
         </p>
       )}
+
+      <FunctionLifecycleDiagram status={version.status} hasSource={!!source} hasArtifact={!!version.artifactObjectKey || !!version.artifactSha256} />
 
       <SourcePanel
         functionId={functionId}
@@ -376,9 +378,12 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, cop
 
   if (!editing) {
     return (
-      <Panel className="p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-foreground">Source</p>
+      <Panel className="overflow-hidden p-0">
+        <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Source workspace</p>
+            <h2 className="mt-1 text-lg font-bold tracking-tight text-foreground">Review generated code before deploy</h2>
+          </div>
           {isDraft && (
             <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
               <UploadIcon className="h-3.5 w-3.5" />
@@ -387,32 +392,53 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, cop
           )}
         </div>
         {source ? (
-          <dl className="mt-2 grid gap-1.5 text-xs">
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-muted">Entrypoint</dt>
-              <dd className="font-mono text-foreground">{source.entrypoint}</dd>
+          <div className="grid gap-4 p-5 lg:grid-cols-[240px_1fr]">
+            <div className="rounded-2xl border border-border bg-surface-2/55 p-3">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Files</p>
+              <div className="mt-3 space-y-1">
+                {source.relativePaths.map((path) => (
+                  <div key={path} className="rounded-xl border border-border bg-surface px-3 py-2 font-mono text-xs text-muted-strong">
+                    {path}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-muted">Handler</dt>
-              <dd className="font-mono text-foreground">{source.handler}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-muted">Files</dt>
-              <dd className="font-mono text-foreground">{source.relativePaths.join(", ")}</dd>
-            </div>
-          </dl>
+            <dl className="grid content-start gap-3 text-sm">
+              <div className="rounded-2xl border border-border bg-surface-2/55 p-3">
+                <dt className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Entrypoint</dt>
+                <dd className="mt-1 font-mono text-foreground">{source.entrypoint}</dd>
+              </div>
+              <div className="rounded-2xl border border-border bg-surface-2/55 p-3">
+                <dt className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Handler</dt>
+                <dd className="mt-1 font-mono text-foreground">{source.handler}</dd>
+              </div>
+              {!isDraft && (
+                <div className="rounded-2xl border border-accent-border bg-accent-soft p-3 text-sm text-accent">
+                  This version is immutable. Create a new draft if you need to patch source.
+                </div>
+              )}
+            </dl>
+          </div>
         ) : (
-          <p className="mt-2 text-sm text-muted">No source submitted yet.</p>
+          <div className="p-5">
+            <div className="rounded-2xl border border-dashed border-border bg-surface/50 p-5">
+              <p className="text-sm font-semibold text-foreground">No source submitted yet.</p>
+              <p className="mt-1 text-sm leading-6 text-muted">
+                Submit source files manually or let your coding agent prepare the first version through MCP.
+              </p>
+            </div>
+          </div>
         )}
       </Panel>
     );
   }
 
   return (
-    <div className={`${panelClass} flex flex-col gap-4 p-4`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-foreground">Source editor</p>
+    <div className={`${panelClass} overflow-hidden p-0`}>
+      <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Source editor</p>
+          <h2 className="mt-1 text-lg font-bold tracking-tight text-foreground">Prepare runnable source</h2>
           {copying && <span className="text-xs text-muted">Copying files from the previous version…</span>}
         </div>
         <div className="flex gap-2">
@@ -424,7 +450,7 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, cop
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 border-b border-border p-5 sm:grid-cols-2">
         <label className={fieldClass}>
           <span className={labelClass}>Entrypoint</span>
           <select value={entrypoint} onChange={(e) => setEntrypoint(e.target.value)} className={inputClass}>
@@ -446,38 +472,64 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, cop
         </label>
       </div>
 
-      <div className={fieldClass}>
-        <span className={labelClass}>Files</span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {files.map((f) => (
-            <div
-              key={f.path}
-              onClick={() => setActivePath(f.path)}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-mono transition-colors ${
-                f.path === activePath
-                  ? "border-cyan-500 bg-cyan-50 text-cyan-700 dark:border-cyan-400 dark:bg-cyan-500/10 dark:text-cyan-400"
-                  : "border-border text-muted hover:border-border-strong hover:text-foreground"
-              }`}
-            >
-              <span>{f.path}</span>
-              {f.path === entrypoint && <span className="text-[9px] uppercase tracking-wide text-muted">entry</span>}
-              {files.length > 1 && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveFile(f.path);
-                  }}
-                  aria-label={`Remove ${f.path}`}
-                  className="cursor-pointer text-muted hover:text-rose-600 dark:hover:text-rose-400"
-                >
-                  <XIcon className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          ))}
-          {addingFile ? (
-            <div className="flex items-center gap-1">
+      <div className="grid min-h-[24rem] lg:grid-cols-[260px_1fr]">
+        <aside className="border-b border-border bg-[#0b0b0d] p-4 lg:border-b-0 lg:border-r">
+          <div className="mb-3 flex items-center justify-between">
+            <span className={labelClass}>Files</span>
+            {!addingFile && (
+              <button type="button" onClick={() => setAddingFile(true)} className="text-xs font-semibold text-accent hover:text-accent-hover">
+                New
+              </button>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {files.map((f) => (
+              <div
+                role="button"
+                tabIndex={0}
+                key={f.path}
+                onClick={() => setActivePath(f.path)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setActivePath(f.path);
+                  }
+                }}
+                className={`group flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-xs font-mono transition-colors ${
+                  f.path === activePath
+                    ? "border-accent-border bg-accent-soft text-accent"
+                    : "border-border bg-surface/70 text-muted hover:text-foreground"
+                }`}
+              >
+                <span className="truncate">{f.path}</span>
+                <span className="flex items-center gap-1">
+                  {f.path === entrypoint && <span className="rounded-full bg-surface px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-muted">entry</span>}
+                  {files.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFile(f.path);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveFile(f.path);
+                        }
+                      }}
+                      aria-label={`Remove ${f.path}`}
+                      className="cursor-pointer text-muted hover:text-danger"
+                    >
+                      <XIcon className="h-3 w-3" />
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          {addingFile && (
+            <div className="mt-3 flex flex-col gap-2 rounded-2xl border border-border bg-surface/70 p-3">
               <input
                 autoFocus
                 type="text"
@@ -491,45 +543,40 @@ function SourcePanel({ functionId, versionId, source, sourceLoaded, isDraft, cop
                   }
                 }}
                 placeholder="package.json"
-                className="h-7 w-32 rounded-md border border-border bg-surface px-2 font-mono text-xs text-foreground outline-none focus:border-cyan-500 dark:focus:border-cyan-400"
+                className={`${inputClass} font-mono text-xs`}
               />
-              <Button variant="secondary" size="sm" onClick={handleAddFile}>
-                Add
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="primary" size="sm" onClick={handleAddFile}>Add</Button>
+                <Button variant="secondary" size="sm" onClick={() => setAddingFile(false)}>Cancel</Button>
+              </div>
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAddingFile(true)}
-              className="flex cursor-pointer items-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1 text-xs text-muted hover:border-cyan-500/60 hover:text-cyan-600 dark:hover:text-cyan-400"
-            >
-              <PlusIcon className="h-3 w-3" />
-              New file
-            </button>
           )}
+        </aside>
+
+        <div className="flex min-w-0 flex-col">
+          <div className="flex items-center justify-between border-b border-border bg-surface/70 px-4 py-3">
+            <span className="font-mono text-xs text-muted-strong">{activeFile?.path ?? "Code"}</span>
+            <span className="text-xs text-muted">{activeFile?.content.length ?? 0} chars</span>
+          </div>
+          <div className="overflow-hidden bg-[#08080a] focus-within:ring-1 focus-within:ring-accent">
+            <CodeMirror
+              value={activeFile?.content ?? ""}
+              onChange={updateActiveContent}
+              extensions={[
+                languageForPath(activeFile?.path ?? ""),
+                syntaxHighlighting(isDark ? codeSyntaxColorsDark : codeSyntaxColorsLight),
+                editorChrome,
+                EditorView.lineWrapping,
+              ]}
+              theme="none"
+              basicSetup={{ highlightActiveLine: true }}
+              minHeight="21rem"
+            />
+          </div>
         </div>
       </div>
 
-      <div className={fieldClass}>
-        <span className={labelClass}>{activeFile?.path ?? "Code"}</span>
-        <div className="overflow-hidden rounded-lg border border-border bg-surface focus-within:border-cyan-500 dark:focus-within:border-cyan-400">
-          <CodeMirror
-            value={activeFile?.content ?? ""}
-            onChange={updateActiveContent}
-            extensions={[
-              languageForPath(activeFile?.path ?? ""),
-              syntaxHighlighting(isDark ? codeSyntaxColorsDark : codeSyntaxColorsLight),
-              editorChrome,
-              EditorView.lineWrapping,
-            ]}
-            theme="none"
-            basicSetup={{ highlightActiveLine: true }}
-            minHeight="14rem"
-          />
-        </div>
-      </div>
-
-      <div className="flex gap-2">
+      <div className="flex gap-2 border-t border-border p-5">
         <Button variant="primary" size="sm" disabled={busy || !entrypoint} onClick={handleSubmit}>
           Submit source
         </Button>
@@ -573,15 +620,23 @@ function ConfigPanel({ functionId, versionId, onError }: ConfigPanelProps) {
   }
 
   return (
-    <Panel className="flex flex-col gap-4 p-4">
-      <div className="flex items-center gap-2">
-        <KeyIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-        <p className="text-sm font-medium text-foreground">Environment &amp; secrets</p>
+    <Panel className="flex flex-col gap-5 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <KeyIcon className="h-4 w-4 text-accent" />
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Effective runtime context</p>
+          </div>
+          <h2 className="mt-2 text-lg font-bold tracking-tight text-foreground">Environment &amp; secrets</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+            Direct FunctionVersion attachments are injected into <code className="font-mono">process.env</code> whenever this exact version runs.
+            Secrets are stored encrypted and never shown again after saving.
+          </p>
+        </div>
+        <span className="rounded-full border border-accent-border bg-accent-soft px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-accent">
+          Direct scope
+        </span>
       </div>
-      <p className="text-xs text-muted">
-        Injected into <code className="font-mono">process.env</code> whenever this exact version runs. Secret values
-        are stored encrypted and never shown again after saving - only their reference key is displayed.
-      </p>
 
       <ConfigList
         title="Environment variables"
@@ -640,9 +695,9 @@ function ConfigList({ title, entries, placeholderValue, secret, onSave, onError 
   }
 
   return (
-    <div className="rounded-lg border border-border">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <p className="text-xs font-medium text-foreground">{title}</p>
+    <div className="overflow-hidden rounded-2xl border border-border bg-surface-2/45">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <p className="text-sm font-bold text-foreground">{title}</p>
         {!adding && (
           <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
             <PlusIcon className="h-3.5 w-3.5" />
@@ -652,22 +707,26 @@ function ConfigList({ title, entries, placeholderValue, secret, onSave, onError 
       </div>
 
       {entries === null ? (
-        <p className="px-3 py-3 text-xs text-muted">Loading…</p>
+        <p className="px-4 py-4 text-sm text-muted">Loading…</p>
       ) : entries.length === 0 && !adding ? (
-        <p className="px-3 py-3 text-xs text-muted">None set.</p>
+        <div className="px-4 py-5">
+          <p className="text-sm font-semibold text-foreground">None attached directly.</p>
+          <p className="mt-1 text-xs leading-5 text-muted">Attach here only when this function version needs values that should not apply to the whole flow.</p>
+        </div>
       ) : (
         <ul className="divide-y divide-border">
           {entries.map((entry) => (
-            <li key={entry.key} className="flex items-center gap-3 px-3 py-2 text-xs">
+            <li key={entry.key} className="flex items-center gap-3 px-4 py-3 text-xs">
               <span className="w-40 shrink-0 truncate font-mono font-medium text-foreground">{entry.key}</span>
               <span className="truncate font-mono text-muted">{secret ? `configured (${entry.display})` : entry.display}</span>
+              <span className="ml-auto rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted">Direct</span>
             </li>
           ))}
         </ul>
       )}
 
       {adding && (
-        <div className="flex flex-wrap items-end gap-2 border-t border-border px-3 py-2.5">
+        <div className="flex flex-wrap items-end gap-2 border-t border-border px-4 py-3">
           <label className={fieldClass}>
             <span className={labelClass}>Key</span>
             <input
@@ -768,28 +827,36 @@ function DatabasesPanel({ functionId, versionId, onError }: DatabasesPanelProps)
   );
 
   return (
-    <Panel className="flex flex-col gap-4 p-4">
-      <div className="flex items-center gap-2">
-        <DatabaseIcon className="h-4 w-4 text-cyan-600 dark:text-cyan-400" />
-        <p className="text-sm font-medium text-foreground">Databases</p>
+    <Panel className="flex flex-col gap-5 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <DatabaseIcon className="h-4 w-4 text-accent" />
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Database attachments</p>
+          </div>
+          <h2 className="mt-2 text-lg font-bold tracking-tight text-foreground">Direct FunctionVersion databases</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+            Attach here when only this function version needs a database. Attach at Flow level when every step should inherit it.
+          </p>
+        </div>
+        <code className="rounded-full border border-border bg-surface px-3 py-1 font-mono text-xs text-muted-strong">context.db(&quot;name&quot;)</code>
       </div>
-      <p className="text-xs text-muted">
-        Attach a managed database and call{" "}
-        <code className="font-mono">context.db(&quot;name&quot;)</code> from the handler to get a warm, ready
-        connection - the function never builds it itself.
-      </p>
 
-      <div className="rounded-lg border border-border">
+      <div className="overflow-hidden rounded-2xl border border-border bg-surface-2/45">
         {attached === null ? (
-          <p className="px-3 py-3 text-xs text-muted">Loading…</p>
+          <p className="px-4 py-4 text-sm text-muted">Loading…</p>
         ) : attached.length === 0 ? (
-          <p className="px-3 py-3 text-xs text-muted">No databases attached.</p>
+          <div className="px-4 py-5">
+            <p className="text-sm font-semibold text-foreground">No direct databases attached.</p>
+            <p className="mt-1 text-xs leading-5 text-muted">If this function needs a shared database, attach it here or inherit one from a Flow later.</p>
+          </div>
         ) : (
           <ul className="divide-y divide-border">
             {attached.map((a) => (
-              <li key={a.id} className="flex items-center gap-3 px-3 py-2 text-xs">
+              <li key={a.id} className="flex items-center gap-3 px-4 py-3 text-xs">
                 <span className="w-40 shrink-0 truncate font-mono font-medium text-foreground">{a.databaseName}</span>
                 <span className="flex-1 truncate text-muted">{a.databaseType}</span>
+                <span className="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted">Direct</span>
                 <Button variant="danger" size="icon" title="Detach" onClick={() => handleDetach(a.databaseId)}>
                   <TrashIcon className="h-3.5 w-3.5" />
                 </Button>
@@ -798,7 +865,7 @@ function DatabasesPanel({ functionId, versionId, onError }: DatabasesPanelProps)
           </ul>
         )}
 
-        <div className="flex flex-wrap items-end gap-2 border-t border-border px-3 py-2.5">
+        <div className="flex flex-wrap items-end gap-2 border-t border-border px-4 py-3">
           <label className={fieldClass}>
             <span className={labelClass}>Database</span>
             <select
@@ -904,71 +971,74 @@ function TestInvokePanel({ functionId, versionId, onError }: TestInvokePanelProp
   }
 
   return (
-    <Panel className="flex flex-col gap-4 p-4">
-      <div className="flex items-center gap-2">
-        <ZapIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-        <p className="text-sm font-medium text-foreground">Test invoke</p>
-      </div>
-      <p className="text-xs text-muted">
-        Runs this exact version directly, with no Flow or Gateway involved. Execution happens asynchronously through
-        the same Dispatcher a real request uses - status updates automatically below once it completes.
-      </p>
-
-      <JsonEditor value={input} onChange={setInput} error={inputError} />
-
-      <div>
-        <Button variant="primary" size="sm" disabled={busy || !!inputError} onClick={handleRun}>
-          <PlayIcon className="h-3.5 w-3.5" />
-          Run
-        </Button>
-      </div>
-
-      {invocationId && (
-        <div className="rounded-lg border border-border bg-background p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs">
-              <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-muted">Invocation status</span>
-              <StatusBadge status={currentStatus} />
+    <Panel className="overflow-hidden p-0">
+      <div className="grid gap-0 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="border-b border-border p-5 lg:border-b-0 lg:border-r">
+          <div className="flex items-center gap-2">
+            <ZapIcon className="h-4 w-4 text-accent" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">Invoke console</p>
+              <h2 className="mt-1 text-lg font-bold tracking-tight text-foreground">Direct function test</h2>
             </div>
-            <Button variant="secondary" size="sm" disabled={inspecting} onClick={handleInspect}>
-              Inspect
+          </div>
+          <p className="mt-3 text-sm leading-6 text-muted">
+            Runs this exact version directly, with no Flow or Gateway involved. Execution still travels through Dispatcher
+            and Runtime so the result matches the real execution path.
+          </p>
+
+          <div className="mt-4 grid gap-2">
+            <PathPill label="Mode" value="Direct Function" />
+            <PathPill label="Path" value="FunctionVersion -> Dispatcher -> Runtime" />
+          </div>
+
+          <div className="mt-5">
+            <JsonEditor value={input} onChange={setInput} error={inputError} minHeight="11rem" />
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="primary" size="sm" disabled={busy || !!inputError} onClick={handleRun}>
+              <PlayIcon className="h-3.5 w-3.5" />
+              {busy ? "Starting…" : "Run test"}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setInput("{}")}>
+              Reset payload
             </Button>
           </div>
-          <p className="mt-1.5 font-mono text-xs text-muted">{invocationId}</p>
+        </div>
 
-          {inspection && (
-            <div className="mt-3 border-t border-border pt-3">
-              <dl className="grid gap-1.5 text-xs">
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0 text-muted">Status</dt>
-                  <dd>
-                    <StatusBadge status={inspection.status} />
-                  </dd>
+        <div className="p-5">
+          {invocationId ? (
+            <LogTraceConsole
+              invocationId={invocationId}
+              currentStatus={currentStatus}
+              inspection={inspection}
+              onRefresh={handleInspect}
+              refreshing={inspecting}
+            />
+          ) : (
+            <div className="flex min-h-full items-center justify-center rounded-3xl border border-dashed border-border bg-[#08080a] p-8">
+              <div className="max-w-sm text-center">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-accent-border bg-accent-soft text-accent">
+                  <PlayIcon className="h-6 w-6" />
                 </div>
-                <div className="flex gap-2">
-                  <dt className="w-20 shrink-0 text-muted">Input</dt>
-                  <dd className="break-all font-mono text-foreground">{inspection.inputPayload}</dd>
-                </div>
-                {inspection.result && (
-                  <div className="flex gap-2">
-                    <dt className="w-20 shrink-0 text-muted">Result</dt>
-                    <dd className="break-all font-mono text-foreground">{inspection.result}</dd>
-                  </div>
-                )}
-                {inspection.error && (
-                  <div className="flex gap-2">
-                    <dt className="w-20 shrink-0 text-muted">Error</dt>
-                    <dd className="break-all font-mono text-rose-600 dark:text-rose-400">{inspection.error}</dd>
-                  </div>
-                )}
-              </dl>
-
-              <OutputLog steps={inspection.steps} />
+                <p className="mt-4 text-sm font-bold text-foreground">No invocation yet</p>
+                <p className="mt-2 text-sm leading-6 text-muted">
+                  Add a JSON payload and run a test. The trace, logs, result, and failures will appear here.
+                </p>
+              </div>
             </div>
           )}
         </div>
-      )}
+      </div>
     </Panel>
+  );
+}
+
+function PathPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface-2/55 p-3">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">{label}</p>
+      <p className="mt-1 font-mono text-xs text-muted-strong">{value}</p>
+    </div>
   );
 }

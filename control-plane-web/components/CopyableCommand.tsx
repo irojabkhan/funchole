@@ -23,11 +23,11 @@ export function CopyableCommand({ value }: { value: string }) {
       {/* pre-wrap (not plain pre): preserves real embedded newlines (e.g. a
           multi-line command) while still wrapping an overly long single
           line instead of forcing horizontal scroll. */}
-      <pre className="flex-1 whitespace-pre-wrap break-all rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-foreground">
+      <pre className="flex-1 whitespace-pre-wrap break-all rounded-xl border border-border bg-[#070709] px-3 py-2 font-mono text-xs leading-5 text-muted-strong shadow-inner shadow-black/40">
         {value}
       </pre>
       <Button variant="secondary" size="icon" title="Copy" onClick={copy}>
-        {copied ? <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <CopyIcon className="h-4 w-4" />}
+        {copied ? <CheckIcon className="h-4 w-4 text-success" /> : <CopyIcon className="h-4 w-4" />}
       </Button>
     </div>
   );

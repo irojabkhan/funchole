@@ -31,7 +31,7 @@ export const codeSyntaxColorsDark = HighlightStyle.define([
 
 export const editorChrome = EditorView.theme({
   "&": { backgroundColor: "transparent", fontSize: "0.75rem" },
-  ".cm-content": { fontFamily: "var(--font-geist-mono), monospace", caretColor: "var(--foreground)" },
+  ".cm-content": { fontFamily: "var(--font-jetbrains-mono), monospace", caretColor: "var(--foreground)" },
   ".cm-gutters": { backgroundColor: "transparent", border: "none", color: "var(--muted)" },
   ".cm-activeLine": { backgroundColor: "var(--surface-hover)" },
   ".cm-activeLineGutter": { backgroundColor: "var(--surface-hover)" },
@@ -84,7 +84,7 @@ export function JsonEditor({ value, onChange, error, minHeight = "8rem", label =
       <span className={labelClass}>{label}</span>
       <div
         className={`overflow-hidden rounded-lg border bg-surface transition-colors ${
-          error ? "border-rose-400 dark:border-rose-500/60" : "border-border focus-within:border-cyan-500 dark:focus-within:border-cyan-400"
+          error ? "border-danger" : "border-border focus-within:border-accent"
         }`}
       >
         <CodeMirror
@@ -96,7 +96,7 @@ export function JsonEditor({ value, onChange, error, minHeight = "8rem", label =
           minHeight={minHeight}
         />
       </div>
-      {error && <p className="text-[11px] text-rose-600 dark:text-rose-400">{error}</p>}
+      {error && <p className="text-[11px] text-danger">{error}</p>}
     </div>
   );
 }

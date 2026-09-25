@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { Pagination } from "@/components/Pagination";
-import { panelClass, Panel } from "@/components/Panel";
 import { Button, buttonClasses } from "@/components/Button";
+import { CreatePanel } from "@/components/CreatePanel";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
+import { PageHeader } from "@/components/PageHeader";
+import { ResourceList, ResourceListState } from "@/components/ResourceList";
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type { FunctionResponse, PaginationResponse } from "@/lib/types";
@@ -97,75 +99,76 @@ export default function FunctionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Functions</h1>
-          <p className="mt-1 text-sm text-muted">
-            A function is versioned code that a Flow step or a direct test can run.
-          </p>
-        </div>
+      <PageHeader
+        eyebrow="Build"
+        title="Actions"
+        description="Reusable pieces of work your agent can prepare, test, and connect to customer-facing workflows."
+        actions={
         <Button variant="primary" onClick={openCreate}>
           <PlusIcon className="h-4 w-4" />
-          New function
+          New action
         </Button>
-      </div>
+        }
+      />
 
       {form && (
-        <form onSubmit={handleSubmit} className={`${panelClass} grid gap-4 p-4 sm:grid-cols-2`}>
-          <label className={fieldClass}>
-            <span className={labelClass}>Function key</span>
-            <input
-              type="text"
-              required
-              maxLength={150}
-              placeholder="fn_hello_world"
-              pattern="[a-zA-Z0-9_.\-]+"
-              value={form.functionKey}
-              onChange={(e) => setForm({ ...form, functionKey: e.target.value })}
-              className={`${inputClass} font-mono`}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Name</span>
-            <input
-              type="text"
-              required
-              maxLength={255}
-              placeholder="Hello World"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={`${fieldClass} sm:col-span-2`}>
-            <span className={labelClass}>Description</span>
-            <input
-              type="text"
-              maxLength={1000}
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              className={inputClass}
-            />
-          </label>
-          <label className={fieldClass}>
-            <span className={labelClass}>Runtime</span>
-            <select
-              value={form.runtime}
-              onChange={(e) => setForm({ ...form, runtime: e.target.value })}
-              className={inputClass}
-            >
-              <option value="NODE">NODE</option>
-            </select>
-          </label>
-          <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" variant="primary" disabled={busy}>
-              Create function
-            </Button>
-            <Button type="button" variant="secondary" onClick={closeForm}>
-              Cancel
-            </Button>
-          </div>
-        </form>
+        <CreatePanel title="New action" description="Create the stable action identity. Source and versions are managed after creation.">
+          <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+            <label className={fieldClass}>
+              <span className={labelClass}>Action key</span>
+              <input
+                type="text"
+                required
+                maxLength={150}
+                placeholder="fn_hello_world"
+                pattern="[a-zA-Z0-9_.\-]+"
+                value={form.functionKey}
+                onChange={(e) => setForm({ ...form, functionKey: e.target.value })}
+                className={`${inputClass} font-mono`}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Name</span>
+              <input
+                type="text"
+                required
+                maxLength={255}
+                placeholder="Hello World"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={`${fieldClass} sm:col-span-2`}>
+              <span className={labelClass}>Description</span>
+              <input
+                type="text"
+                maxLength={1000}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                className={inputClass}
+              />
+            </label>
+            <label className={fieldClass}>
+              <span className={labelClass}>Runtime</span>
+              <select
+                value={form.runtime}
+                onChange={(e) => setForm({ ...form, runtime: e.target.value })}
+                className={inputClass}
+              >
+                <option value="NODE">NODE</option>
+              </select>
+            </label>
+            <div className="flex gap-2 sm:col-span-2">
+              <Button type="submit" variant="primary" disabled={busy}>
+                Create action
+              </Button>
+              <Button type="button" variant="secondary" onClick={closeForm}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </CreatePanel>
       )}
 
       {error && (
@@ -174,56 +177,35 @@ export default function FunctionsPage() {
         </p>
       )}
 
-      <Panel className="overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-muted">
-              <th className="px-4 py-3 font-medium">Name</th>
-              <th className="px-4 py-3 font-medium">Runtime</th>
-              <th className="px-4 py-3 font-medium">Created</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!functions && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {functions?.items.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-muted">
-                  No functions yet.
-                </td>
-              </tr>
-            )}
-            {functions?.items.map((fn) => (
-              <tr key={fn.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                <td className="px-4 py-3">
-                  <Link href={`/functions/${fn.id}`} className="font-medium text-foreground hover:text-cyan-600 dark:hover:text-cyan-400">
-                    {fn.name}
-                  </Link>
-                  <p className="font-mono text-xs text-muted">{fn.functionKey}</p>
-                </td>
-                <td className="px-4 py-3 text-muted">{fn.runtime}</td>
-                <td className="px-4 py-3 text-muted">{new Date(fn.createdAt).toLocaleString()}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Link href={`/functions/${fn.id}`} className={buttonClasses("secondary", "sm")}>
-                      Open
-                    </Link>
-                    <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(fn)}>
-                      <TrashIcon className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      <ResourceList title="Action catalog" description="Open an action to inspect versions, source, runtime context, and tests.">
+        {!functions && <ResourceListState>Loading actions…</ResourceListState>}
+        {functions?.items.length === 0 && (
+          <ResourceListState>No actions yet. Create one manually or let a connected agent prepare the first capability.</ResourceListState>
+        )}
+        {functions?.items.map((fn) => (
+          <div key={fn.id} className="grid gap-4 px-5 py-4 transition-colors hover:bg-accent-soft lg:grid-cols-[1fr_auto]">
+            <div className="min-w-0">
+              <Link href={`/functions/${fn.id}`} className="text-base font-bold text-foreground hover:text-accent">
+                {fn.name}
+              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code className="rounded-full border border-border bg-surface-2 px-2.5 py-1 font-mono text-xs text-muted-strong">{fn.functionKey}</code>
+                <span className="rounded-full border border-accent-border bg-accent-soft px-2.5 py-1 font-mono text-xs font-bold text-accent">{fn.runtime}</span>
+                <span className="text-xs text-muted">Created {new Date(fn.createdAt).toLocaleString()}</span>
+              </div>
+              {fn.description && <p className="mt-2 text-sm leading-6 text-muted">{fn.description}</p>}
+            </div>
+            <div className="flex items-center gap-2 lg:justify-end">
+              <Link href={`/functions/${fn.id}`} className={buttonClasses("secondary", "sm")}>
+                Open action
+              </Link>
+              <Button variant="danger" size="icon" title="Delete" onClick={() => handleDelete(fn)}>
+                <TrashIcon className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </ResourceList>
 
       {functions && (
         <Pagination
