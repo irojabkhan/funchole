@@ -35,7 +35,7 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `DB_PASSWORD` | `funchole` | DB password |
 | `APP_VERSION` | `0.1.0-SNAPSHOT` | reported app/MCP server version |
 | `SERVER_PORT` | `7080` | HTTP listen port |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | allowed CORS origins |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | comma-separated browser origin(s) allowed to call this API cross-origin. **Production must set this** to the real public web origin (e.g. `https://app.funchole.dev`) - the default only works for local dev, and an unset/wrong value fails every browser request with a CORS preflight error, not a clear auth error. Not read by the frontend - set directly on `controlplane`, not `control-plane-web`. |
 | `NATS_URL` | `nats://localhost:4222` | NATS broker URL |
 | `SOURCE_STORAGE_ROOT` | `/tmp/funchole-sources` | on-disk Function source storage root, only used when `SOURCE_STORE_TYPE=local` |
 | `SOURCE_STORE_TYPE` | `local` | `local` (ephemeral unless `SOURCE_STORAGE_ROOT` is a persistent volume) or `s3` (durable - stores source in the same S3-compatible bucket as build artifacts, reusing the `S3_ARTIFACT_*` credentials below; `docker-compose.yml` sets this to `s3` for production) |

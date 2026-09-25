@@ -42,6 +42,12 @@ services:
       BAO_ADDR: http://openbao:8200
       BAO_TOKEN_FILE: /openbao/bootstrap/controlplane-token
       NATS_URL: nats://nats:4222
+      # The browser's own origin(s) allowed to call this API cross-origin -
+      # comma-separated. Defaults to the local dev web app; production must
+      # set this to the real public web origin (e.g. https://app.funchole.dev
+      # once ADMIN_WEB_PROXY_HOST is configured) or the login page's fetch
+      # calls fail CORS preflight with no Access-Control-Allow-Origin header.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
       # Submitted Function source is stored in the same S3-compatible
       # bucket as build artifacts (app.artifact.* / S3_ARTIFACT_* above),
       # not on this container's own ephemeral disk - see S3SourceStore.

@@ -316,10 +316,15 @@ a Function/Flow. A `Gateway`'s public hostname is always
    ADMIN_WEB_PROXY_HOST=app.funchole.dev
    CONTROLPLANE_API_PROXY_HOST=api-controlplane.funchole.dev
    PUBLIC_CONTROLPLANE_URL=https://api-controlplane.funchole.dev
+   CORS_ALLOWED_ORIGINS=https://app.funchole.dev
    ```
    `ADMIN_WEB_PROXY_TARGET`/`CONTROLPLANE_API_PROXY_TARGET` don't need
    setting - they already default to `web:3000`/`controlplane:7080`, the
-   right docker-network addresses for `docker-compose.yml`.
+   right docker-network addresses for `docker-compose.yml`. Don't skip
+   `CORS_ALLOWED_ORIGINS` - without it the browser's calls from
+   `app.funchole.dev` to `api-controlplane.funchole.dev` fail CORS
+   preflight (no `Access-Control-Allow-Origin` header), which looks like a
+   network/auth problem in the browser console, not a config one.
 5. Rebuild and restart the stack (`PUBLIC_CONTROLPLANE_URL` is baked into
    the `web` image at build time - a plain restart without `--build` won't
    pick it up). `controlplane`'s port 7080 is no longer published to the
