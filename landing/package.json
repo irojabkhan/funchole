@@ -1,0 +1,7 @@
+{
+  "name": "funchole-landing",
+  "private": true,
+  "scripts": {
+    "build": "mkdir -p dist && cp index.html script.js styles.css dist/"
+  }
+}
