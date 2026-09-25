@@ -6,12 +6,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.funchole.backend.controlplane.config.CloudModeProperties;
 import com.funchole.backend.controlplane.config.GoogleAuthProperties;
 import com.funchole.backend.controlplane.config.SecurityProperties;
+import com.funchole.backend.controlplane.config.TenantDatabaseProperties;
 import com.funchole.backend.controlplane.constant.DomainStatus;
 import com.funchole.backend.controlplane.entity.AppDomain;
 import com.funchole.backend.controlplane.entity.AppUser;
+import com.funchole.backend.controlplane.entity.Database;
 import com.funchole.backend.controlplane.entity.Gateway;
 import com.funchole.backend.controlplane.repository.AppDomainRepository;
 import com.funchole.backend.controlplane.repository.AppUserRepository;
+import com.funchole.backend.controlplane.repository.DatabaseRepository;
 import com.funchole.backend.controlplane.repository.GatewayRepository;
 import com.funchole.backend.controlplane.repository.PackageRepository;
 import com.funchole.backend.controlplane.repository.UserPackageRepository;
@@ -19,6 +22,9 @@ import com.funchole.backend.controlplane.security.JwtService;
 import com.funchole.backend.controlplane.security.JwtToken;
 import com.funchole.backend.core.base.exception.ForbiddenException;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -70,6 +76,15 @@ class GoogleAuthServiceTests {
             .withUsername("test")
             .withPassword("test");
 
+    // Stands in for the separate tenant-db server (not @ServiceConnection -
+    // this must stay a second, independent server, never wired up as the
+    // app's own primary datasource).
+    @Container
+    static PostgreSQLContainer<?> tenantDbPostgres = new PostgreSQLContainer<>("postgres:17.6")
+            .withDatabaseName("postgres")
+            .withUsername("tenant_admin")
+            .withPassword("tenant_admin");
+
     @Autowired
     private AppUserRepository appUserRepository;
 
@@ -87,6 +102,12 @@ class GoogleAuthServiceTests {
 
     @Autowired
     private DomainService domainService;
+
+    @Autowired
+    private DatabaseRepository databaseRepository;
+
+    @Autowired
+    private DatabaseService databaseService;
 
     @Autowired
     private GatewayCertificateService gatewayCertificateService;
@@ -166,6 +187,22 @@ class GoogleAuthServiceTests {
         List<Gateway> gateways = gatewayRepository.findAllByAppUser_Id(created.getId(), Pageable.unpaged()).getContent();
         assertThat(gateways).hasSize(1);
         assertThat(gateways.get(0).getName()).isEqualTo("Default Gateway");
+
+        List<Database> databases = databaseRepository.findAllByAppUser_IdAndDeletedAtIsNull(created.getId(), Pageable.unpaged()).getContent();
+        assertThat(databases).hasSize(1);
+        Database database = databases.get(0);
+        assertThat(database.getName()).isEqualTo("Default Database");
+        // The real provisioning DDL actually ran against tenant-db - connect
+        // with the generated credentials directly, proving this isn't just
+        // a Database row with no matching Postgres role/database behind it.
+        String password = databaseService.revealPassword(created.getId(), database.getId());
+        try (Connection connection = DriverManager.getConnection(
+                "jdbc:postgresql://" + database.getHost() + ":" + database.getPort() + "/" + database.getDatabaseName(),
+                database.getUsername(), password)) {
+            assertThat(connection.isValid(5)).isTrue();
+        } catch (SQLException exception) {
+            throw new RuntimeException(exception);
+        }
     }
 
     @Test
@@ -229,8 +266,14 @@ class GoogleAuthServiceTests {
         GatewayService scopedGatewayService = new GatewayService(
                 gatewayRepository, domainService, gatewayCertificateService, applicationEventPublisher,
                 packageLimitService, new CloudModeProperties(cloudModeEnabled), securityProperties);
+        TenantDatabaseProperties tenantDatabaseProperties = new TenantDatabaseProperties(
+                tenantDbPostgres.getHost(), tenantDbPostgres.getMappedPort(5432), "tenant_admin", "tenant_admin");
+        TenantDatabaseProvisioningService tenantDatabaseProvisioningService =
+                new TenantDatabaseProvisioningService(tenantDatabaseProperties);
         return new CloudSignupService(
-                appUserRepository, userPackageRepository, packageRepository, scopedGatewayService, passwordEncoder);
+                appUserRepository, userPackageRepository, packageRepository, databaseRepository,
+                scopedGatewayService, databaseService, tenantDatabaseProvisioningService, tenantDatabaseProperties,
+                passwordEncoder);
     }
 
     private AppDomain verifiedPlatformDomain() {

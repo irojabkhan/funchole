@@ -11,5 +11,6 @@ public enum PackageLimitKey {
     MAX_GATEWAYS,
     MAX_FLOWS,
     MAX_FUNCTIONS,
-    MAX_DOMAINS
+    MAX_DOMAINS,
+    MAX_DATABASES
 }

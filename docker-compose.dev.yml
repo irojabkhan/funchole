@@ -7,6 +7,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      tenant-db:
+        condition: service_healthy
       openbao-init:
         condition: service_completed_successfully
       dns:
@@ -304,6 +306,26 @@ services:
     networks:
       - funchole-dev-network
 
+  # Separate from db above - see docker-compose.yml's tenant-db for why.
+  # Published on 5433 (not 5432) for local psql access alongside db.
+  tenant-db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: tenant_admin
+      POSTGRES_PASSWORD: tenant_admin
+    ports:
+      - "5433:5432"
+    volumes:
+      - tenant-postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenant_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - funchole-dev-network
+
   dns:
     image: technitium/dns-server:latest
     environment:
@@ -320,6 +342,7 @@ services:
 
 volumes:
   postgres-dev-data:
+  tenant-postgres-dev-data:
   openbao-dev-data:
   technitium-dev-data:
   web-node-modules:

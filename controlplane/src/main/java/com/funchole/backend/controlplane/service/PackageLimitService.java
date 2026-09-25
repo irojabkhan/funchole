@@ -97,6 +97,7 @@ public class PackageLimitService {
             case MAX_FLOWS -> "flow(s)";
             case MAX_FUNCTIONS -> "function(s)";
             case MAX_DOMAINS -> "domain(s)";
+            case MAX_DATABASES -> "database(s)";
         };
     }
 }

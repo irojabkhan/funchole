@@ -97,12 +97,13 @@ fi
 
 # Fall back to the same literal values docker-compose.dev.yml has always
 # used when these aren't set, so local development needs no .env file at
-# all. docker-compose.yml (production) sets all four as required variables
+# all. docker-compose.yml (production) sets all five as required variables
 # (see x-app-secrets-env), so these fallbacks are never reached there.
 DB_PASSWORD_VALUE="${DB_PASSWORD:-funchole}"
 JWT_SECRET_VALUE="${JWT_SECRET:-ZGV2LXNlY3JldC1mb3ItZnVuY2hvbGUtYmFja2VuZC1jaGFuZ2UtbWUtYmVmb3JlLXByb2QteHl6MTIzNDU2Nzg5MDEyMw==}"
 BOOTSTRAP_USERNAME_VALUE="${BOOTSTRAP_USERNAME:-admin}"
 BOOTSTRAP_PASSWORD_VALUE="${BOOTSTRAP_PASSWORD:-admin12345}"
+TENANT_DB_ADMIN_PASSWORD_VALUE="${TENANT_DB_ADMIN_PASSWORD:-tenant_admin}"
 
 render_secret_file() {
   # "|" delimiter because JWT_SECRET/DB_PASSWORD are expected to be
@@ -112,6 +113,7 @@ render_secret_file() {
     -e "s|__JWT_SECRET__|${JWT_SECRET_VALUE}|g" \
     -e "s|__BOOTSTRAP_USERNAME__|${BOOTSTRAP_USERNAME_VALUE}|g" \
     -e "s|__BOOTSTRAP_PASSWORD__|${BOOTSTRAP_PASSWORD_VALUE}|g" \
+    -e "s|__TENANT_DB_ADMIN_PASSWORD__|${TENANT_DB_ADMIN_PASSWORD_VALUE}|g" \
     "$1"
 }
 

@@ -33,6 +33,10 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `DB_URL` | `jdbc:postgresql://localhost:5432/funchole` | Postgres JDBC URL |
 | `DB_USERNAME` | `funchole` | DB user |
 | `DB_PASSWORD` | `funchole` | DB password |
+| `TENANT_DB_HOST` | `tenant-db` | Host of the separate Postgres server every self-registered user's default `Database` is provisioned on (see `TenantDatabaseProvisioningService`/`CloudSignupService`) - deliberately not the same server as `DB_URL` above, which holds FuncHole's own control-plane schema. |
+| `TENANT_DB_PORT` | `5432` | Port of that same server. |
+| `TENANT_DB_ADMIN_USERNAME` | `tenant_admin` | Maintenance-only role controlplane connects as to run `CREATE ROLE`/`CREATE DATABASE` - never used for tenant traffic itself. |
+| `TENANT_DB_ADMIN_PASSWORD` | `tenant_admin` | Password for that role. **Production must set this** (see `TENANT_DB_ADMIN_PASSWORD` in `.env.example`) - the default only works for local dev. |
 | `APP_VERSION` | `0.1.0-SNAPSHOT` | reported app/MCP server version |
 | `SERVER_PORT` | `7080` | HTTP listen port |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | comma-separated browser origin(s) allowed to call this API cross-origin. **Production must set this** to the real public web origin (e.g. `https://app.funchole.dev`) - the default only works for local dev, and an unset/wrong value fails every browser request with a CORS preflight error, not a clear auth error. Not read by the frontend - set directly on `controlplane`, not `control-plane-web`. |

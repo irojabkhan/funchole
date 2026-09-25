@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
@@ -42,6 +43,35 @@ public class OpenBaoFunctionSecretStore implements FunctionSecretStore {
     @Override
     public String saveForDatabase(UUID databaseId, String key, String value) {
         return writeSecret(databaseSecretRef(databaseId, key), value);
+    }
+
+    @Override
+    public String readSecretValue(String secretRef) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(secretUri(secretRef))
+                    .header("X-Vault-Token", baoToken)
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 300) {
+                throw new IllegalStateException("OpenBao secret read failed with status " + response.statusCode());
+            }
+
+            // KV v2's read shape nests the stored document one level deeper
+            // than the write body: {"data": {"data": {"value": "..."}}}.
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode value = root.path("data").path("data").path("value");
+            if (value.isMissingNode() || value.isNull()) {
+                throw new IllegalStateException("OpenBao secret has no 'value' field: " + secretRef);
+            }
+            return value.asText();
+        } catch (IOException | InterruptedException exception) {
+            if (exception instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new IllegalStateException("Failed to read secret from OpenBao", exception);
+        }
     }
 
     private String writeSecret(String secretRef, String value) {

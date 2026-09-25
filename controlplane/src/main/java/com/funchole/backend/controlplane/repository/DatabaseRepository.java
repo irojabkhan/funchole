@@ -14,4 +14,11 @@ public interface DatabaseRepository extends JpaRepository<Database, UUID> {
     Optional<Database> findByIdAndAppUser_IdAndDeletedAtIsNull(UUID id, UUID appUserId);
 
     boolean existsByAppUser_IdAndNameAndDeletedAtIsNull(UUID appUserId, String name);
+
+    long countByAppUser_IdAndDeletedAtIsNull(UUID appUserId);
+
+    // Global (not per-user) - the generated Postgres identifier itself must
+    // be unique across every tenant on the shared tenant-db server, not just
+    // unique within one user's own rows.
+    boolean existsByDatabaseName(String databaseName);
 }

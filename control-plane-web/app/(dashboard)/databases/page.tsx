@@ -4,8 +4,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Pagination } from "@/components/Pagination";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
+import { Modal } from "@/components/Modal";
+import { CopyableCommand } from "@/components/CopyableCommand";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
-import { PlusIcon, TrashIcon, PencilIcon } from "@/components/icons";
+import { PlusIcon, TrashIcon, PencilIcon, KeyIcon } from "@/components/icons";
 import { api, ApiError } from "@/lib/api";
 import type { DatabaseResponse, PaginationResponse } from "@/lib/types";
 
@@ -49,6 +51,9 @@ export default function DatabasesPage() {
   const [form, setForm] = useState<DatabaseFormState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [revealing, setRevealing] = useState<DatabaseResponse | null>(null);
+  const [revealedPassword, setRevealedPassword] = useState<string | null>(null);
+  const [revealError, setRevealError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +132,24 @@ export default function DatabasesPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleReveal(db: DatabaseResponse) {
+    setRevealing(db);
+    setRevealedPassword(null);
+    setRevealError(null);
+    try {
+      const result = await api.revealDatabasePassword(db.id);
+      setRevealedPassword(result.password);
+    } catch (err) {
+      setRevealError(err instanceof ApiError ? err.message : "Failed to reveal password");
+    }
+  }
+
+  function closeReveal() {
+    setRevealing(null);
+    setRevealedPassword(null);
+    setRevealError(null);
   }
 
   async function handleDelete(db: DatabaseResponse) {
@@ -304,6 +327,9 @@ export default function DatabasesPage() {
                 <td className="px-4 py-3 text-muted">{new Date(db.createdAt).toLocaleString()}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
+                    <Button variant="secondary" size="icon" title="Reveal password" onClick={() => handleReveal(db)}>
+                      <KeyIcon className="h-4 w-4" />
+                    </Button>
                     <Button variant="secondary" size="icon" title="Edit" onClick={() => openEdit(db)}>
                       <PencilIcon className="h-4 w-4" />
                     </Button>
@@ -325,6 +351,32 @@ export default function DatabasesPage() {
           totalElements={databases.totalElements}
           onChange={setPage}
         />
+      )}
+
+      {revealing && (
+        <Modal title={`Password for "${revealing.name}"`} onClose={closeReveal}>
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-muted">
+              <code className="rounded bg-surface-hover px-1 py-0.5 font-mono text-xs">
+                {revealing.host}:{revealing.port}/{revealing.databaseName}
+              </code>{" "}
+              as <span className="font-mono">{revealing.username}</span>
+            </p>
+            {revealError && (
+              <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                {revealError}
+              </p>
+            )}
+            {revealedPassword ? (
+              <CopyableCommand value={revealedPassword} />
+            ) : (
+              !revealError && <p className="text-sm text-muted">Loading…</p>
+            )}
+            <Button variant="secondary" className="self-end" onClick={closeReveal}>
+              Done
+            </Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

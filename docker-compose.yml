@@ -11,6 +11,7 @@ x-app-secrets-env: &app-secrets-env
   JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your .env file (see .env.example)}
   BOOTSTRAP_USERNAME: ${BOOTSTRAP_USERNAME:?Set BOOTSTRAP_USERNAME in your .env file (see .env.example)}
   BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:?Set BOOTSTRAP_PASSWORD in your .env file (see .env.example)}
+  TENANT_DB_ADMIN_PASSWORD: ${TENANT_DB_ADMIN_PASSWORD:?Set TENANT_DB_ADMIN_PASSWORD in your .env file (see .env.example)}
 
 # Every service gets this - without it, Docker's default json-file log
 # driver grows unbounded, which will eventually fill the disk on a VPS with
@@ -30,6 +31,8 @@ services:
       target: controlplane
     depends_on:
       db:
+        condition: service_healthy
+      tenant-db:
         condition: service_healthy
       openbao-init:
         condition: service_completed_successfully
@@ -365,8 +368,35 @@ services:
     networks:
       - funchole-network
 
+  # A separate Postgres server, deliberately isolated from the db service
+  # above (which holds FuncHole's own control-plane schema) - every
+  # self-registered user's auto-provisioned default Database is created
+  # here (see TenantDatabaseProvisioningService/CloudSignupService), so a
+  # tenant's own workload never shares a server with platform data or can
+  # degrade login/API performance. admin_user here is a maintenance-only
+  # role controlplane uses solely to run CREATE ROLE/CREATE DATABASE, never
+  # for tenant traffic itself.
+  tenant-db:
+    image: postgres:17.6
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: tenant_admin
+      POSTGRES_PASSWORD: ${TENANT_DB_ADMIN_PASSWORD:?Set TENANT_DB_ADMIN_PASSWORD in your .env file (see .env.example)}
+    # No host port published - same reasoning as db above.
+    volumes:
+      - tenant-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tenant_admin -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+    networks:
+      - funchole-network
+
 volumes:
   postgres-data:
+  tenant-postgres-data:
   openbao-data:
   nats-data:
   rustfs-data:

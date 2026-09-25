@@ -1,6 +1,7 @@
 package com.funchole.backend.controlplane.controller;
 
 import com.funchole.backend.controlplane.dto.DatabaseCreateRequest;
+import com.funchole.backend.controlplane.dto.DatabasePasswordResponse;
 import com.funchole.backend.controlplane.dto.DatabaseResponse;
 import com.funchole.backend.controlplane.dto.DatabaseUpdateRequest;
 import com.funchole.backend.controlplane.entity.AppUser;
@@ -80,6 +81,16 @@ public class DatabaseController {
         AppUser appUser = profileService.loadUserById(appUserPrincipal.getId());
         Database database = databaseService.createDatabase(appUser, request);
         return ApiResponse.success(databaseMapper.toResponse(database));
+    }
+
+    @GetMapping("/{databaseId}/password")
+    @SecurityRequirement(name = "bearerAuth")
+    public ApiResponse<DatabasePasswordResponse> revealPassword(
+            @AuthenticationPrincipal AppUserPrincipal appUserPrincipal,
+            @PathVariable UUID databaseId
+    ) {
+        String password = databaseService.revealPassword(appUserPrincipal.getId(), databaseId);
+        return ApiResponse.success(new DatabasePasswordResponse(password));
     }
 
     @PutMapping("/{databaseId}")

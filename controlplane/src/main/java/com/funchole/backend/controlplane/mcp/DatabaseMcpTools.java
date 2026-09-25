@@ -53,6 +53,16 @@ public class DatabaseMcpTools {
     }
 
     @McpTool(
+            name = "reveal_database_password",
+            description = "Reveal a Database resource's password - a separate explicit call, never included in "
+                    + "list_databases/get_database, so it's only returned when specifically asked for."
+    )
+    public Map<String, String> revealDatabasePassword(@McpToolParam(description = "Database id (UUID)") String databaseId) {
+        String password = databaseService.revealPassword(CurrentMcpUser.id(), UUID.fromString(databaseId));
+        return Map.of("password", password);
+    }
+
+    @McpTool(
             name = "create_database",
             description = "Register an external Postgres database as a managed Database resource. The password "
                     + "is stored securely and never returned again - attach the result to a FunctionVersion with "

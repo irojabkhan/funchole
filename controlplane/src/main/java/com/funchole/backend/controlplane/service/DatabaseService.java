@@ -1,5 +1,6 @@
 package com.funchole.backend.controlplane.service;
 
+import com.funchole.backend.controlplane.constant.PackageLimitKey;
 import com.funchole.backend.controlplane.dto.DatabaseCreateRequest;
 import com.funchole.backend.controlplane.dto.DatabaseUpdateRequest;
 import com.funchole.backend.controlplane.entity.AppUser;
@@ -20,10 +21,16 @@ public class DatabaseService {
 
     private final DatabaseRepository databaseRepository;
     private final FunctionSecretStore functionSecretStore;
+    private final PackageLimitService packageLimitService;
 
-    public DatabaseService(DatabaseRepository databaseRepository, FunctionSecretStore functionSecretStore) {
+    public DatabaseService(
+            DatabaseRepository databaseRepository,
+            FunctionSecretStore functionSecretStore,
+            PackageLimitService packageLimitService
+    ) {
         this.databaseRepository = databaseRepository;
         this.functionSecretStore = functionSecretStore;
+        this.packageLimitService = packageLimitService;
     }
 
     public Page<Database> listDatabases(UUID appUserId, int page, int size) {
@@ -40,8 +47,22 @@ public class DatabaseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Database not found: " + databaseId));
     }
 
+    /**
+     * A deliberately separate, explicit action - never folded into
+     * {@link #getDatabaseById}/{@link #listDatabases}, so a password is only
+     * ever returned when a caller specifically asks for it, not on every
+     * plain listing call.
+     */
+    public String revealPassword(UUID appUserId, UUID databaseId) {
+        Database database = getDatabaseById(appUserId, databaseId);
+        return functionSecretStore.readSecretValue(database.getPasswordSecretRef());
+    }
+
     @Transactional
     public Database createDatabase(AppUser appUser, DatabaseCreateRequest request) {
+        packageLimitService.enforce(appUser.getId(), PackageLimitKey.MAX_DATABASES,
+                databaseRepository.countByAppUser_IdAndDeletedAtIsNull(appUser.getId()));
+
         if (databaseRepository.existsByAppUser_IdAndNameAndDeletedAtIsNull(appUser.getId(), request.name())) {
             throw new IllegalArgumentException("Database name already in use: " + request.name());
         }

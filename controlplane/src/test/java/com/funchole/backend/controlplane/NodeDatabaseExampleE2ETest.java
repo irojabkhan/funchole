@@ -182,6 +182,11 @@ class NodeDatabaseExampleE2ETest {
         public String read(String secretRef) {
             return values.get(secretRef);
         }
+
+        @Override
+        public String readSecretValue(String secretRef) {
+            return values.get(secretRef);
+        }
     }
 
     private static final RecordingSecretStore SECRET_STORE = new RecordingSecretStore();

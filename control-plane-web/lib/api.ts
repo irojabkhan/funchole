@@ -7,6 +7,7 @@ import type {
   ApiResponse,
   AuthTokenResponse,
   DatabaseCreateRequest,
+  DatabasePasswordResponse,
   DatabaseResponse,
   DatabaseUpdateRequest,
   DirectFlowInvocationResponse,
@@ -402,6 +403,10 @@ export const api = {
 
   deleteDatabase(id: string): Promise<Record<string, string>> {
     return request(`/api/v1/databases/${id}`, { method: "DELETE" });
+  },
+
+  revealDatabasePassword(id: string): Promise<DatabasePasswordResponse> {
+    return request(`/api/v1/databases/${id}/password`);
   },
 
   listEnvironments(page: number, size: number): Promise<PaginationResponse<EnvironmentProfileResponse>> {

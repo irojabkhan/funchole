@@ -4,8 +4,9 @@ import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
 import { Modal } from "@/components/Modal";
+import { CopyableCommand } from "@/components/CopyableCommand";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
-import { PlusIcon, TrashIcon, CopyIcon, CheckIcon, AnthropicIcon, OpenAIIcon, OpencodeIcon } from "@/components/icons";
+import { PlusIcon, TrashIcon, AnthropicIcon, OpenAIIcon, OpencodeIcon } from "@/components/icons";
 import { api, ApiError, API_BASE_URL } from "@/lib/api";
 import type { ApiKeyResponse } from "@/lib/types";
 
@@ -226,35 +227,6 @@ export default function ApiKeysPage() {
           </tbody>
         </table>
       </Panel>
-    </div>
-  );
-}
-
-function CopyableCommand({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard access can be denied by the browser - the command is
-      // still shown on screen, so this isn't fatal, just a lost convenience.
-    }
-  }
-
-  return (
-    <div className="flex items-start gap-2">
-      {/* pre-wrap (not plain pre): preserves real embedded newlines, like
-          Codex's two-line command, while still wrapping an overly long
-          single-line command instead of forcing horizontal scroll. */}
-      <pre className="flex-1 whitespace-pre-wrap break-all rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-foreground">
-        {value}
-      </pre>
-      <Button variant="secondary" size="icon" title="Copy" onClick={copy}>
-        {copied ? <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <CopyIcon className="h-4 w-4" />}
-      </Button>
     </div>
   );
 }

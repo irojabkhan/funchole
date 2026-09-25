@@ -207,23 +207,35 @@ class FunctionVersionConfigIntegrationTests {
 
     private static final class RecordingFunctionSecretStore implements FunctionSecretStore {
         private final Map<String, String> values = new ConcurrentHashMap<>();
+        private final Map<String, String> byRef = new ConcurrentHashMap<>();
 
         @Override
         public String save(UUID functionVersionId, String key, String value) {
             values.put(cacheKey(functionVersionId, key), value);
-            return "function-versions/" + functionVersionId + "/secrets/" + key;
+            String ref = "function-versions/" + functionVersionId + "/secrets/" + key;
+            byRef.put(ref, value);
+            return ref;
         }
 
         @Override
         public String saveForEnvironment(UUID environmentProfileId, String key, String value) {
             values.put(cacheKey(environmentProfileId, key), value);
-            return "environments/" + environmentProfileId + "/secrets/" + key;
+            String ref = "environments/" + environmentProfileId + "/secrets/" + key;
+            byRef.put(ref, value);
+            return ref;
         }
 
         @Override
         public String saveForDatabase(UUID databaseId, String key, String value) {
             values.put(cacheKey(databaseId, key), value);
-            return "databases/" + databaseId + "/" + key;
+            String ref = "databases/" + databaseId + "/" + key;
+            byRef.put(ref, value);
+            return ref;
+        }
+
+        @Override
+        public String readSecretValue(String secretRef) {
+            return byRef.get(secretRef);
         }
 
         String valueFor(UUID functionVersionId, String key) {

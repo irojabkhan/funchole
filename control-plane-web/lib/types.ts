@@ -327,6 +327,10 @@ export interface DatabaseUpdateRequest {
   sslEnabled?: boolean | null;
 }
 
+export interface DatabasePasswordResponse {
+  password: string;
+}
+
 export interface EnvironmentProfileResponse {
   id: string;
   environmentKey: string;
