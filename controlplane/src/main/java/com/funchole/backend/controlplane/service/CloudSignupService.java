@@ -114,7 +114,7 @@ public class CloudSignupService {
         tenantDatabaseProvisioningService.provisionDatabase(identifier, identifier, password);
 
         databaseService.createDatabase(appUser, new DatabaseCreateRequest(
-                "Default Database",
+                "defaultdb",
                 "POSTGRES",
                 tenantDatabaseProperties.host(),
                 tenantDatabaseProperties.port(),

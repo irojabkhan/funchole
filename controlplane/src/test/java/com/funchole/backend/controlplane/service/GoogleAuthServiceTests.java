@@ -191,7 +191,7 @@ class GoogleAuthServiceTests {
         List<Database> databases = databaseRepository.findAllByAppUser_IdAndDeletedAtIsNull(created.getId(), Pageable.unpaged()).getContent();
         assertThat(databases).hasSize(1);
         Database database = databases.get(0);
-        assertThat(database.getName()).isEqualTo("Default Database");
+        assertThat(database.getName()).isEqualTo("defaultdb");
         // The real provisioning DDL actually ran against tenant-db - connect
         // with the generated credentials directly, proving this isn't just
         // a Database row with no matching Postgres role/database behind it.
