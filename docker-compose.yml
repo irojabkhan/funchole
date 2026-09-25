@@ -125,6 +125,8 @@ services:
       ADMIN_WEB_PROXY_TARGET: ${ADMIN_WEB_PROXY_TARGET:-web:3000}
       CONTROLPLANE_API_PROXY_HOST: ${CONTROLPLANE_API_PROXY_HOST:-}
       CONTROLPLANE_API_PROXY_TARGET: ${CONTROLPLANE_API_PROXY_TARGET:-controlplane:7080}
+      LANDING_PROXY_HOST: ${LANDING_PROXY_HOST:-}
+      LANDING_PROXY_TARGET: ${LANDING_PROXY_TARGET:-landing:80}
     healthcheck:
       test: ["CMD-SHELL", "curl -kfsS https://127.0.0.1:443/health >/dev/null 2>&1"]
       interval: 5s
@@ -288,6 +290,23 @@ services:
       start_period: 15s
     ports:
       - "3000:3000"
+    logging: *default-logging
+    networks:
+      - funchole-network
+
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    # No host port mapping - same reasoning as controlplane above: once
+    # LANDING_PROXY_HOST is configured on the gateway service, the Gateway
+    # is the only public path to this, reachable internally as landing:80.
     logging: *default-logging
     networks:
       - funchole-network

@@ -208,17 +208,19 @@ public final class GatewayMain {
 
     /**
      * Optional, cloud product only - reverse-proxies a fixed hostname (the
-     * admin web app and/or the controlplane API) straight to its internal
-     * docker-network address instead of the normal AppDomain/Flow dispatch.
-     * Both pairs are independently optional; an unset {@code *_HOST}
-     * excludes that entry, and with neither set (the self-hosted default)
-     * this returns {@link FixedHostProxy#empty()} and the whole feature is
-     * inert. See docs/development.md before configuring this.
+     * admin web app, the controlplane API, and/or the marketing landing
+     * page) straight to its internal docker-network address instead of the
+     * normal AppDomain/Flow dispatch. Each pair is independently optional;
+     * an unset {@code *_HOST} excludes that entry, and with none set (the
+     * self-hosted default) this returns {@link FixedHostProxy#empty()} and
+     * the whole feature is inert. See docs/development.md before
+     * configuring this.
      */
     private static FixedHostProxy loadFixedHostProxy() {
         Map<String, ProxyTarget> targetsByHostname = new HashMap<>();
         addFixedHostProxyEntry(targetsByHostname, "ADMIN_WEB_PROXY_HOST", "ADMIN_WEB_PROXY_TARGET", "web:3000");
         addFixedHostProxyEntry(targetsByHostname, "CONTROLPLANE_API_PROXY_HOST", "CONTROLPLANE_API_PROXY_TARGET", "controlplane:7080");
+        addFixedHostProxyEntry(targetsByHostname, "LANDING_PROXY_HOST", "LANDING_PROXY_TARGET", "landing:80");
 
         Map<String, FixedHostProxy.PathOverride> pathOverridesByHostname = new HashMap<>();
         addMcpPathOverride(pathOverridesByHostname);

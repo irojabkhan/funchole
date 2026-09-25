@@ -93,6 +93,8 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `ADMIN_WEB_PROXY_TARGET` | `web:3000` | `host:port` the Gateway forwards to when `ADMIN_WEB_PROXY_HOST` matches. Only read when that's set. |
 | `CONTROLPLANE_API_PROXY_HOST` | `""` (empty) | Same mechanism as `ADMIN_WEB_PROXY_HOST`, for the controlplane REST/MCP API (e.g. `api-controlplane.funchole.dev`) - what the web app's browser-side JS calls, since it can't reach an internal docker hostname. |
 | `CONTROLPLANE_API_PROXY_TARGET` | `controlplane:7080` | `host:port` the Gateway forwards to when `CONTROLPLANE_API_PROXY_HOST` matches. Only read when that's set. |
+| `LANDING_PROXY_HOST` | `""` (empty) | Same mechanism as `ADMIN_WEB_PROXY_HOST`, for the marketing landing page (`landing/`, served by the small `landing` service - plain nginx, no build step). Typically the bare AppDomain itself (e.g. `funchole.dev`, no subdomain) - which already has a TLS certificate once that `AppDomain` is `VERIFIED`, no separate `Gateway` row needed for this one specifically, unlike `ADMIN_WEB_PROXY_HOST`/`CONTROLPLANE_API_PROXY_HOST` above. |
+| `LANDING_PROXY_TARGET` | `landing:80` | `host:port` the Gateway forwards to when `LANDING_PROXY_HOST` matches. Only read when that's set. |
 
 ## dispatcher
 
