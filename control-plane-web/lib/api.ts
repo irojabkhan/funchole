@@ -45,7 +45,10 @@ import type {
   ProfileResponse,
 } from "@/lib/types";
 
-const API_BASE_URL =
+// Exported so the UI can build absolute URLs (e.g. the MCP endpoint shown in
+// per-agent connect commands) - never hardcode localhost there, this is the
+// same value the API client itself calls in every environment.
+export const API_BASE_URL =
   process.env.NEXT_PUBLIC_CONTROLPLANE_URL ?? "http://localhost:7080";
 
 export class ApiError extends Error {

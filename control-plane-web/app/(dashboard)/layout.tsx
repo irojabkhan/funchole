@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { href: "/databases", label: "Databases", icon: DatabaseIcon },
   { href: "/gateways", label: "Gateways", icon: ServerIcon },
   { href: "/domains", label: "Domains", icon: GlobeIcon },
-  { href: "/api-keys", label: "API Keys", icon: TerminalIcon },
+  { href: "/api-keys", label: "MCP API Keys", icon: TerminalIcon },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

@@ -1,12 +1,42 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { panelClass, Panel } from "@/components/Panel";
 import { Button } from "@/components/Button";
+import { Modal } from "@/components/Modal";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
-import { PlusIcon, TrashIcon, CopyIcon, CheckIcon } from "@/components/icons";
-import { api, ApiError } from "@/lib/api";
+import { PlusIcon, TrashIcon, CopyIcon, CheckIcon, AnthropicIcon, OpenAIIcon, OpencodeIcon } from "@/components/icons";
+import { api, ApiError, API_BASE_URL } from "@/lib/api";
 import type { ApiKeyResponse } from "@/lib/types";
+
+const MCP_URL = `${API_BASE_URL}/api/mcp`;
+
+interface AgentCommand {
+  name: string;
+  icon: (props: { className?: string }) => ReactNode;
+  command: (rawKey: string) => string;
+}
+
+const AGENT_COMMANDS: AgentCommand[] = [
+  {
+    name: "Claude Code",
+    icon: AnthropicIcon,
+    command: (rawKey) =>
+      `claude mcp add --transport http funchole ${MCP_URL} --header "Authorization: Bearer ${rawKey}"`,
+  },
+  {
+    name: "Codex",
+    icon: OpenAIIcon,
+    command: (rawKey) =>
+      `export FUNCHOLE_MCP_TOKEN=${rawKey}\ncodex mcp add funchole --url ${MCP_URL} --bearer-token-env-var FUNCHOLE_MCP_TOKEN`,
+  },
+  {
+    name: "opencode",
+    icon: OpencodeIcon,
+    command: (rawKey) =>
+      `opencode mcp add funchole --url ${MCP_URL} --header "Authorization=Bearer ${rawKey}"`,
+  },
+];
 
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyResponse[] | null>(null);
@@ -16,7 +46,6 @@ export default function ApiKeysPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +54,7 @@ export default function ApiKeysPage() {
         const data = await api.listApiKeys();
         if (!cancelled) setKeys(data);
       } catch {
-        if (!cancelled) setError("Failed to load API keys");
+        if (!cancelled) setError("Failed to load MCP API keys");
       }
     })();
     return () => {
@@ -48,7 +77,7 @@ export default function ApiKeysPage() {
       setCreating(false);
       refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to create API key");
+      setError(err instanceof ApiError ? err.message : "Failed to create MCP API key");
     } finally {
       setBusy(false);
     }
@@ -63,19 +92,7 @@ export default function ApiKeysPage() {
       await api.revokeApiKey(key.id);
       refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to revoke API key");
-    }
-  }
-
-  async function copyRevealedKey() {
-    if (!revealedKey) return;
-    try {
-      await navigator.clipboard.writeText(revealedKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // Clipboard access can be denied by the browser - the key is still
-      // shown on screen, so this isn't fatal, just a lost convenience.
+      setError(err instanceof ApiError ? err.message : "Failed to revoke MCP API key");
     }
   }
 
@@ -83,7 +100,7 @@ export default function ApiKeysPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">API Keys</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">MCP API Keys</h1>
           <p className="mt-1 text-sm text-muted">
             Long-lived credentials for machine clients - point your MCP-compatible coding agent at{" "}
             <code className="rounded bg-surface-hover px-1 py-0.5 font-mono text-xs">/api/mcp</code> with one of
@@ -97,22 +114,33 @@ export default function ApiKeysPage() {
       </div>
 
       {revealedKey && (
-        <div className="flex flex-col gap-2 rounded-xl border border-cyan-300 bg-cyan-50 p-4 dark:border-cyan-500/40 dark:bg-cyan-500/10">
-          <p className="text-sm font-medium text-foreground">
-            Copy this key now - it won&apos;t be shown again.
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-foreground">
-              {revealedKey}
-            </code>
-            <Button variant="secondary" size="icon" title="Copy" onClick={copyRevealedKey}>
-              {copied ? <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <CopyIcon className="h-4 w-4" />}
+        <Modal title="Connect your coding agent" onClose={() => setRevealedKey(null)} widthClassName="max-w-xl">
+          <div className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium text-foreground">
+                Copy this key now - it won&apos;t be shown again.
+              </p>
+              <CopyableCommand value={revealedKey} />
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <p className="text-sm font-medium text-foreground">Or paste the ready-to-run command for your agent:</p>
+              {AGENT_COMMANDS.map((agent) => (
+                <div key={agent.name} className="flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <agent.icon className="h-4 w-4" />
+                    {agent.name}
+                  </div>
+                  <CopyableCommand value={agent.command(revealedKey)} />
+                </div>
+              ))}
+            </div>
+
+            <Button variant="secondary" className="self-end" onClick={() => setRevealedKey(null)}>
+              Done
             </Button>
           </div>
-          <Button variant="ghost" className="self-start" onClick={() => setRevealedKey(null)}>
-            Done
-          </Button>
-        </div>
+        </Modal>
       )}
 
       {creating && (
@@ -198,6 +226,35 @@ export default function ApiKeysPage() {
           </tbody>
         </table>
       </Panel>
+    </div>
+  );
+}
+
+function CopyableCommand({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access can be denied by the browser - the command is
+      // still shown on screen, so this isn't fatal, just a lost convenience.
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      {/* pre-wrap (not plain pre): preserves real embedded newlines, like
+          Codex's two-line command, while still wrapping an overly long
+          single-line command instead of forcing horizontal scroll. */}
+      <pre className="flex-1 whitespace-pre-wrap break-all rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs text-foreground">
+        {value}
+      </pre>
+      <Button variant="secondary" size="icon" title="Copy" onClick={copy}>
+        {copied ? <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : <CopyIcon className="h-4 w-4" />}
+      </Button>
     </div>
   );
 }
