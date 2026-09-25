@@ -219,7 +219,11 @@ public final class GatewayMain {
         Map<String, ProxyTarget> targetsByHostname = new HashMap<>();
         addFixedHostProxyEntry(targetsByHostname, "ADMIN_WEB_PROXY_HOST", "ADMIN_WEB_PROXY_TARGET", "web:3000");
         addFixedHostProxyEntry(targetsByHostname, "CONTROLPLANE_API_PROXY_HOST", "CONTROLPLANE_API_PROXY_TARGET", "controlplane:7080");
-        return new FixedHostProxy(targetsByHostname);
+
+        Map<String, FixedHostProxy.PathOverride> pathOverridesByHostname = new HashMap<>();
+        addMcpPathOverride(pathOverridesByHostname);
+
+        return new FixedHostProxy(targetsByHostname, pathOverridesByHostname);
     }
 
     private static void addFixedHostProxyEntry(
@@ -230,6 +234,28 @@ public final class GatewayMain {
             return;
         }
         targetsByHostname.put(hostname.trim().toLowerCase(), ProxyTarget.parse(readString(targetEnvVar, defaultTarget)));
+    }
+
+    /**
+     * Lets an MCP client reach controlplane's MCP server at
+     * {@code <admin-web-host>/mcp} instead of requiring the separate
+     * controlplane API domain - a friendlier URL for the exact same
+     * backend, rewritten to controlplane's real {@code /api/mcp} route
+     * before forwarding (see {@code FixedHostProxy.PathOverride}). Only
+     * registered when the admin web proxy itself is configured, since
+     * there's no admin web host to attach this shortcut to otherwise; reuses
+     * {@code CONTROLPLANE_API_PROXY_TARGET} so there is exactly one place
+     * that says where controlplane actually lives.
+     */
+    private static void addMcpPathOverride(Map<String, FixedHostProxy.PathOverride> pathOverridesByHostname) {
+        String adminWebHost = readString("ADMIN_WEB_PROXY_HOST", "");
+        if (adminWebHost.isBlank()) {
+            return;
+        }
+        ProxyTarget controlplaneTarget = ProxyTarget.parse(readString("CONTROLPLANE_API_PROXY_TARGET", "controlplane:7080"));
+        pathOverridesByHostname.put(
+                adminWebHost.trim().toLowerCase(),
+                new FixedHostProxy.PathOverride("/mcp", "/api/mcp", controlplaneTarget));
     }
 
     /**

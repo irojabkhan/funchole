@@ -7,10 +7,13 @@ import { Modal } from "@/components/Modal";
 import { CopyableCommand } from "@/components/CopyableCommand";
 import { inputClass, labelClass, fieldClass } from "@/components/Input";
 import { PlusIcon, TrashIcon, AnthropicIcon, OpenAIIcon, OpencodeIcon } from "@/components/icons";
-import { api, ApiError, API_BASE_URL } from "@/lib/api";
+import { api, ApiError, API_BASE_URL, APP_URL } from "@/lib/api";
 import type { ApiKeyResponse } from "@/lib/types";
 
-const MCP_URL = `${API_BASE_URL}/api/mcp`;
+// Prefer the Gateway's own <app-url>/mcp shortcut (see FixedHostProxy.PathOverride)
+// when this deployment has one configured; otherwise fall back to the
+// controlplane API domain's real /api/mcp route, which always works.
+const MCP_URL = APP_URL ? `${APP_URL}/mcp` : `${API_BASE_URL}/api/mcp`;
 
 interface AgentCommand {
   name: string;

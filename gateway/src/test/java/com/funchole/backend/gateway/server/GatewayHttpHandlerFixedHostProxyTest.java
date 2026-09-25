@@ -131,6 +131,46 @@ class GatewayHttpHandlerFixedHostProxyTest {
     }
 
     @Test
+    void pathOverrideRewritesUriAndForwardsToItsOwnTargetInsteadOfTheHostnameDefault() throws Exception {
+        LinkedBlockingQueue<HttpExchange> received = new LinkedBlockingQueue<>();
+        startFakeTarget(exchange -> {
+            received.add(exchange);
+            exchange.sendResponseHeaders(200, -1);
+        });
+
+        // The hostname's own default target (a dead port - never reached)
+        // is deliberately distinct from the override's target (the real
+        // fake server), so a path that should NOT match the override still
+        // gets its own coverage failure mode: proof the override only fires
+        // for matching paths, not for every request on this hostname.
+        int deadPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            deadPort = socket.getLocalPort();
+        }
+
+        FixedHostProxy proxy = new FixedHostProxy(
+                Map.of(PROXY_HOSTNAME, new ProxyTarget("127.0.0.1", deadPort)),
+                Map.of(PROXY_HOSTNAME, new FixedHostProxy.PathOverride(
+                        "/mcp", "/api/mcp", new ProxyTarget("127.0.0.1", targetServer.getAddress().getPort()))));
+        int gatewayPort = startGateway(proxy);
+
+        FullHttpRequest request = new DefaultFullHttpRequest(
+                HttpVersion.HTTP_1_1, HttpMethod.GET, "/mcp?foo=bar", Unpooled.EMPTY_BUFFER);
+        request.headers().set(HttpHeaderNames.HOST, PROXY_HOSTNAME);
+
+        FullHttpResponse response = sendRequest(gatewayPort, request);
+        try {
+            assertEquals(200, response.status().code());
+        } finally {
+            response.release();
+        }
+
+        HttpExchange forwarded = received.poll(5, TimeUnit.SECONDS);
+        assertNotNull(forwarded, "override target never received a request");
+        assertEquals("/api/mcp?foo=bar", forwarded.getRequestURI().toString());
+    }
+
+    @Test
     void respondsWithBadGatewayWhenTheTargetIsUnreachable() throws Exception {
         int deadPort;
         try (ServerSocket socket = new ServerSocket(0)) {
@@ -153,7 +193,7 @@ class GatewayHttpHandlerFixedHostProxyTest {
     }
 
     private FixedHostProxy fixedHostProxy(int targetPort) {
-        return new FixedHostProxy(Map.of(PROXY_HOSTNAME, new ProxyTarget("127.0.0.1", targetPort)));
+        return new FixedHostProxy(Map.of(PROXY_HOSTNAME, new ProxyTarget("127.0.0.1", targetPort)), Map.of());
     }
 
     private void startFakeTarget(com.sun.net.httpserver.HttpHandler handler) throws IOException {

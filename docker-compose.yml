@@ -272,6 +272,11 @@ services:
         # https://api-controlplane.funchole.dev once CONTROLPLANE_API_PROXY_HOST
         # is configured on the gateway service. Defaults to the dev value.
         NEXT_PUBLIC_CONTROLPLANE_URL: ${PUBLIC_CONTROLPLANE_URL:-http://localhost:7080}
+        # Same build-time-only rule. The web app's own public URL, e.g.
+        # https://app.funchole.dev - should match ADMIN_WEB_PROXY_HOST on the
+        # gateway service exactly. Empty by default (unset here means no
+        # /mcp shortcut is shown, not that anything breaks).
+        NEXT_PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
     depends_on:
       controlplane:
         condition: service_healthy

@@ -89,7 +89,7 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `DB_URL` | `jdbc:postgresql://localhost:5432/funchole` | Postgres JDBC URL |
 | `DB_USERNAME` | `funchole` | DB user |
 | `DB_PASSWORD` | `funchole` | DB password |
-| `ADMIN_WEB_PROXY_HOST` | `""` (empty) | **Cloud product only.** When set (e.g. `app.funchole.dev`), a request whose `Host` header matches this exactly is reverse-proxied straight to `ADMIN_WEB_PROXY_TARGET` instead of the normal AppDomain/Flow dispatch - this is how `control-plane-web` gets served over real HTTPS on the same port 443 without a separate reverse proxy (Caddy/nginx/etc). Requires a real `Gateway`/`AppDomain` row provisioned for this exact hostname so it has a TLS certificate - see `docs/development.md`. Empty (the default) disables this entirely. |
+| `ADMIN_WEB_PROXY_HOST` | `""` (empty) | **Cloud product only.** When set (e.g. `app.funchole.dev`), a request whose `Host` header matches this exactly is reverse-proxied straight to `ADMIN_WEB_PROXY_TARGET` instead of the normal AppDomain/Flow dispatch - this is how `control-plane-web` gets served over real HTTPS on the same port 443 without a separate reverse proxy (Caddy/nginx/etc). Requires a real `Gateway`/`AppDomain` row provisioned for this exact hostname so it has a TLS certificate - see `docs/development.md`. Also gives this exact hostname's own `/mcp` path a shortcut straight to controlplane's MCP server (rewritten to its real `/api/mcp` route, forwarded to `CONTROLPLANE_API_PROXY_TARGET`) - so an MCP client can use `<ADMIN_WEB_PROXY_HOST>/mcp` instead of the separate controlplane API domain. Empty (the default) disables this entirely, `/mcp` shortcut included. |
 | `ADMIN_WEB_PROXY_TARGET` | `web:3000` | `host:port` the Gateway forwards to when `ADMIN_WEB_PROXY_HOST` matches. Only read when that's set. |
 | `CONTROLPLANE_API_PROXY_HOST` | `""` (empty) | Same mechanism as `ADMIN_WEB_PROXY_HOST`, for the controlplane REST/MCP API (e.g. `api-controlplane.funchole.dev`) - what the web app's browser-side JS calls, since it can't reach an internal docker hostname. |
 | `CONTROLPLANE_API_PROXY_TARGET` | `controlplane:7080` | `host:port` the Gateway forwards to when `CONTROLPLANE_API_PROXY_HOST` matches. Only read when that's set. |
@@ -141,6 +141,7 @@ production `web` image's wiring different from every other service here.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_CONTROLPLANE_URL` | `http://localhost:7080` | base URL the browser calls for the Controlplane REST API. In the production `web` image this is set from the Compose-level `PUBLIC_CONTROLPLANE_URL` var (e.g. `https://api-controlplane.funchole.dev` once `CONTROLPLANE_API_PROXY_HOST` is configured on the gateway service - see `docs/development.md`), not set directly. |
+| `NEXT_PUBLIC_APP_URL` | `""` (empty) | the web app's own public URL, e.g. `https://app.funchole.dev` (set from the Compose-level `PUBLIC_APP_URL` var - should match `ADMIN_WEB_PROXY_HOST` on the gateway service exactly, scheme included). Purely cosmetic: when set, the MCP API Keys page shows `<this>/mcp` as the connect URL (the Gateway's own shortcut - see `ADMIN_WEB_PROXY_HOST` above) instead of `NEXT_PUBLIC_CONTROLPLANE_URL/api/mcp`; unset, it just shows the longer URL, nothing breaks. |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `""` (empty) | same value as controlplane's `GOOGLE_OAUTH_CLIENT_ID` above - unset means the login page's "Sign in with Google" button simply doesn't render |
 
 ## How values actually reach each service
@@ -178,8 +179,9 @@ Two separate layers are involved, and it's easy to set a value in the wrong one:
      browser bundle at `npm run build` time, so a plain runtime
      `environment:` entry (layer 2 above) has no effect on them there - the
      production `web` service in `docker-compose.yml` instead passes
-     `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and `NEXT_PUBLIC_CONTROLPLANE_URL`
-     (sourced from the Compose-level `PUBLIC_CONTROLPLANE_URL`) in as Docker
+     `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_CONTROLPLANE_URL`
+     (sourced from the Compose-level `PUBLIC_CONTROLPLANE_URL`), and
+     `NEXT_PUBLIC_APP_URL` (sourced from `PUBLIC_APP_URL`) in as Docker
      build ARGs (see the Dockerfile's `build-web` stage). The dev `web`
      service doesn't need this extra hop - `next dev` reads `NEXT_PUBLIC_*`
      values live from its own container's environment on every compile, so a

@@ -8,7 +8,6 @@ import com.funchole.backend.gateway.GatewayRuntimeEntry;
 import com.funchole.backend.gateway.flow.FlowResolution;
 import com.funchole.backend.gateway.flow.FlowResolver;
 import com.funchole.backend.gateway.flow.RouteMatch;
-import com.funchole.backend.gateway.server.FixedHostProxy.ProxyTarget;
 import com.funchole.backend.gateway.staticsite.StaticContentTypes;
 import com.funchole.backend.gateway.staticsite.StaticFileResolver;
 import com.funchole.backend.gateway.staticsite.StaticIndexHtml;
@@ -109,13 +108,16 @@ public final class GatewayHttpHandler extends SimpleChannelInboundHandler<FullHt
             return;
         }
 
-        ProxyTarget proxyTarget = fixedHostProxy.targetFor(requestContext.hostname());
-        if (proxyTarget != null) {
-            // The admin web app / controlplane API: not an AppDomain/Flow at
-            // all (deliberately zero Flow rows - see FixedHostProxy), so
-            // this must run before the normal gatewayRegistry/flowResolver
-            // lookup below.
-            FixedHostProxyForwarder.forward(context, request, proxyTarget, requestContext.hostname());
+        FixedHostProxy.Resolution proxyResolution = fixedHostProxy.resolve(
+                requestContext.hostname(), requestContext.path(), requestContext.rawUri());
+        if (proxyResolution != null) {
+            // The admin web app / controlplane API (including the admin
+            // host's own /mcp shortcut - see FixedHostProxy.PathOverride):
+            // not an AppDomain/Flow at all (deliberately zero Flow rows -
+            // see FixedHostProxy), so this must run before the normal
+            // gatewayRegistry/flowResolver lookup below.
+            FixedHostProxyForwarder.forward(
+                    context, request, proxyResolution.target(), proxyResolution.uri(), requestContext.hostname());
             return;
         }
 

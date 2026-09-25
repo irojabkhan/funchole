@@ -52,6 +52,12 @@ import type {
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_CONTROLPLANE_URL ?? "http://localhost:7080";
 
+// The web app's own public URL (e.g. https://app.funchole.dev), only set in
+// production once the Gateway's ADMIN_WEB_PROXY_HOST is configured - see
+// docs/environment-variables.md. Empty/undefined everywhere else (including
+// local dev, where the Gateway's /mcp shortcut this enables doesn't exist).
+export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || null;
+
 export class ApiError extends Error {
   readonly status: number;
   readonly details: string[];

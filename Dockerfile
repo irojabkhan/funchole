@@ -116,6 +116,14 @@ ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
 # value so an untouched build keeps working exactly as before.
 ARG NEXT_PUBLIC_CONTROLPLANE_URL="http://localhost:7080"
 ENV NEXT_PUBLIC_CONTROLPLANE_URL=${NEXT_PUBLIC_CONTROLPLANE_URL}
+# Same build-time-only inlining - the web app's own public URL (e.g.
+# https://app.funchole.dev), used to show the shorter <ADMIN_WEB_PROXY_HOST>/mcp
+# connect command instead of the controlplane API domain's /api/mcp once the
+# Gateway's own /mcp shortcut is configured (see FixedHostProxy.PathOverride).
+# Empty by default: the per-agent connect commands just fall back to
+# NEXT_PUBLIC_CONTROLPLANE_URL/api/mcp, which always works regardless.
+ARG NEXT_PUBLIC_APP_URL=""
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
 COPY control-plane-web/package.json control-plane-web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY control-plane-web/ ./

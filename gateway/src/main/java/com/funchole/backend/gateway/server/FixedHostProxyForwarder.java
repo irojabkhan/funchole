@@ -69,8 +69,11 @@ final class FixedHostProxyForwarder {
 
     /**
      * Forwards {@code request} to {@code target} and writes its response
-     * back on {@code originContext}. Retains {@code request} itself for the
-     * duration of the (async) forward and releases it exactly once - the
+     * back on {@code originContext}. {@code outboundUri} is the URI sent to
+     * {@code target} - normally the inbound request's own URI unchanged, but
+     * a rewritten one for a {@link FixedHostProxy.PathOverride} match (see
+     * {@link FixedHostProxy#resolve}). Retains {@code request} itself for
+     * the duration of the (async) forward and releases it exactly once - the
      * caller does not need to manage its lifecycle. Never throws: any
      * failure (connect refused, timeout, malformed upstream response) is
      * written back as a 502 instead of propagating, since this Gateway
@@ -81,12 +84,13 @@ final class FixedHostProxyForwarder {
             ChannelHandlerContext originContext,
             FullHttpRequest request,
             ProxyTarget target,
+            String outboundUri,
             String originalHostname
     ) {
         request.retain();
         AtomicBoolean responded = new AtomicBoolean(false);
         try {
-            FullHttpRequest outboundRequest = buildOutboundRequest(request, target, originalHostname, clientAddress(originContext));
+            FullHttpRequest outboundRequest = buildOutboundRequest(request, target, outboundUri, originalHostname, clientAddress(originContext));
             request.release();
 
             new Bootstrap()
@@ -129,12 +133,12 @@ final class FixedHostProxyForwarder {
     }
 
     private static FullHttpRequest buildOutboundRequest(
-            FullHttpRequest inbound, ProxyTarget target, String originalHostname, String clientAddress
+            FullHttpRequest inbound, ProxyTarget target, String outboundUri, String originalHostname, String clientAddress
     ) {
         FullHttpRequest outbound = new DefaultFullHttpRequest(
                 HttpVersion.HTTP_1_1,
                 inbound.method(),
-                inbound.uri(),
+                outboundUri,
                 inbound.content().retainedDuplicate()
         );
         copyHeaders(inbound.headers(), outbound.headers());
