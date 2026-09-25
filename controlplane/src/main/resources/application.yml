@@ -109,7 +109,11 @@ app:
   security:
     jwt:
       secret: ${JWT_SECRET:ZGV2LXNlY3JldC1mb3ItZnVuY2hvbGUtYmFja2VuZC1jaGFuZ2UtbWUtYmVmb3JlLXByb2QteHl6MTIzNDU2Nzg5MDEyMw==}
-      expiration-seconds: ${JWT_EXPIRATION_SECONDS:3600}
+      # 30 days - a logged-in browser session (admin dashboard/login) stays
+      # valid this long before needing to sign in again. Unrelated to MCP API
+      # keys (fh_mcp_... - a separate, revocable, non-expiring mechanism for
+      # machine clients, see ApiKeyAuthenticationFilter).
+      expiration-seconds: ${JWT_EXPIRATION_SECONDS:2592000}
     bootstrap-user:
       username: ${BOOTSTRAP_USERNAME:admin}
       password: ${BOOTSTRAP_PASSWORD:admin12345}

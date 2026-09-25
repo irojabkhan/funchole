@@ -53,7 +53,7 @@ Optional, safe defaults if left unset: `S3_ARTIFACT_BUCKET` (`funchole-artifacts
 | `CERTIFICATE_ACME_POLL_INTERVAL_SECONDS` | `3` | ACME order/challenge status poll interval |
 | `CERTIFICATE_ACME_MAX_POLL_ATTEMPTS` | `20` | max ACME poll attempts before giving up |
 | `JWT_SECRET` | a known dev value (**must be overridden in production** - see above) | JWT signing secret, must be base64 |
-| `JWT_EXPIRATION_SECONDS` | `3600` | JWT token lifetime |
+| `JWT_EXPIRATION_SECONDS` | `2592000` (30 days) | Browser login session (JWT) lifetime - unrelated to MCP API keys (`fh_mcp_...`), which don't expire on their own and are revoked individually instead. |
 | `BOOTSTRAP_USERNAME` | `admin` | initial admin username (renaming not wired up - see `AdminBootstrapRunner`) |
 | `BOOTSTRAP_PASSWORD` | `admin12345` | if changed from this default, rotates the seeded admin account's password on next boot |
 | `BAO_ADDR` | `http://localhost:8200` | OpenBao address |
