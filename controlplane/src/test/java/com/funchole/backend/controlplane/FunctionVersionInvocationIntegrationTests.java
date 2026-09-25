@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +22,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -205,5 +209,18 @@ class FunctionVersionInvocationIntegrationTests {
                 .andExpect(status().isOk())
                 .andReturn();
         return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
+    }
+
+    @TestConfiguration
+    static class SynchronousBuildExecutorConfig {
+        // deploy() hands its build/publish pipeline to a FunctionBuildExecutor
+        // and returns immediately (see FunctionVersionDeploymentService); a
+        // same-thread executor keeps createReadyVersion's deploy-then-assert
+        // call deterministic instead of racing the real bounded background pool.
+        @Bean
+        @Primary
+        FunctionBuildExecutor synchronousFunctionBuildExecutor() {
+            return Runnable::run;
+        }
     }
 }

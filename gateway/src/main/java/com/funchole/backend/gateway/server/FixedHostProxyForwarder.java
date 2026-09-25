@@ -50,13 +50,19 @@ final class FixedHostProxyForwarder {
             "proxy-authenticate", "proxy-authorization", "te", "trailer");
 
     // The admin UI/API, not tenant Function traffic - a generous cap for a
-    // real HTML/JS/CSS payload, well above the 64 KiB the inbound pipeline
-    // aggregates request bodies to (GatewayChannelInitializer), which is
-    // unrelated: that limit is for requests arriving at the Gateway, this
-    // one is for responses coming back from the internal target.
+    // real HTML/JS/CSS payload, well above the inbound pipeline's own cap
+    // (GatewayChannelInitializer), which is unrelated: that limit is for
+    // requests arriving at the Gateway, this one is for responses coming
+    // back from the internal target.
     private static final int MAX_PROXIED_RESPONSE_BYTES = 10 * 1024 * 1024;
     private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
-    private static final int READ_TIMEOUT_SECONDS = 30;
+    // Controlplane operations behind this proxy (e.g. large source
+    // submission, database provisioning) can legitimately take longer than
+    // a typical request; deploy_function_version itself is asynchronous
+    // (returns immediately, callers poll for status) precisely so it never
+    // needs to lean on this timeout, but this margin still covers other
+    // slower synchronous endpoints.
+    private static final int READ_TIMEOUT_SECONDS = 120;
 
     private FixedHostProxyForwarder() {
     }

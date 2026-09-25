@@ -13,6 +13,7 @@ import com.funchole.backend.controlplane.constant.GatewayStatus;
 import com.funchole.backend.controlplane.entity.AppDomain;
 import com.funchole.backend.controlplane.entity.AppUser;
 import com.funchole.backend.controlplane.entity.Gateway;
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.funchole.backend.controlplane.mcp.FunctionExampleFixtures;
 import com.funchole.backend.controlplane.repository.AppDomainRepository;
 import com.funchole.backend.controlplane.repository.AppUserRepository;
@@ -32,7 +33,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -280,6 +284,17 @@ class FlowVersionInvocationIntegrationTests {
 
         mockMvc.perform(post("/api/v1/functions/{functionId}/versions/{versionId}/deploy", functionId, functionVersionId)
                         .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk());
+
+        // deploy()'s own response body is a pre-pipeline PUBLISHING snapshot
+        // (see FunctionVersionDeploymentService) - unlike the other
+        // deploy-related integration test classes, this one is deliberately
+        // NOT @Transactional, so there is no shared-persistence-context
+        // artifact to mask that here. The synchronous test executor (see
+        // SynchronousBuildExecutorConfig below) still guarantees the pipeline
+        // has genuinely finished by this point, so a fresh read confirms READY.
+        mockMvc.perform(get("/api/v1/functions/{functionId}/versions/{versionId}", functionId, functionVersionId)
+                        .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("READY"));
 
@@ -327,5 +342,19 @@ class FlowVersionInvocationIntegrationTests {
                 .andExpect(status().isOk())
                 .andReturn();
         return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
+    }
+
+    @TestConfiguration
+    static class SynchronousBuildExecutorConfig {
+        // deploy() hands its build/publish pipeline to a FunctionBuildExecutor
+        // and returns immediately (see FunctionVersionDeploymentService); a
+        // same-thread executor keeps createReadyFunctionVersion's
+        // deploy-then-assert call deterministic instead of racing the real
+        // bounded background pool.
+        @Bean
+        @Primary
+        FunctionBuildExecutor synchronousFunctionBuildExecutor() {
+            return Runnable::run;
+        }
     }
 }

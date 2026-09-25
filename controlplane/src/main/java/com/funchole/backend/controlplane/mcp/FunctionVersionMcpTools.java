@@ -15,6 +15,7 @@ import com.funchole.backend.controlplane.entity.SourceBundle;
 import com.funchole.backend.controlplane.entity.SourceFile;
 import com.funchole.backend.controlplane.mapper.FunctionVersionMapper;
 import com.funchole.backend.controlplane.service.FunctionVersionBuildLogService;
+import com.funchole.backend.controlplane.service.FunctionVersionCloneService;
 import com.funchole.backend.controlplane.service.FunctionVersionConfigService;
 import com.funchole.backend.controlplane.service.FunctionVersionDatabaseService;
 import com.funchole.backend.controlplane.service.FunctionVersionDeploymentService;
@@ -42,6 +43,7 @@ import org.springframework.stereotype.Service;
 public class FunctionVersionMcpTools {
 
     private final FunctionVersionService functionVersionService;
+    private final FunctionVersionCloneService functionVersionCloneService;
     private final FunctionVersionSourceService functionVersionSourceService;
     private final FunctionVersionDeploymentService functionVersionDeploymentService;
     private final FunctionVersionConfigService functionVersionConfigService;
@@ -51,6 +53,7 @@ public class FunctionVersionMcpTools {
 
     public FunctionVersionMcpTools(
             FunctionVersionService functionVersionService,
+            FunctionVersionCloneService functionVersionCloneService,
             FunctionVersionSourceService functionVersionSourceService,
             FunctionVersionDeploymentService functionVersionDeploymentService,
             FunctionVersionConfigService functionVersionConfigService,
@@ -59,6 +62,7 @@ public class FunctionVersionMcpTools {
             FunctionVersionMapper functionVersionMapper
     ) {
         this.functionVersionService = functionVersionService;
+        this.functionVersionCloneService = functionVersionCloneService;
         this.functionVersionSourceService = functionVersionSourceService;
         this.functionVersionDeploymentService = functionVersionDeploymentService;
         this.functionVersionConfigService = functionVersionConfigService;
@@ -94,18 +98,35 @@ public class FunctionVersionMcpTools {
 
     @McpTool(
             name = "create_function_version",
-            description = "Create a new DRAFT FunctionVersion under a Function. Submit source next with "
-                    + "submit_function_version_source, then deploy_function_version to make it READY."
+            description = "Create a new DRAFT FunctionVersion under a Function. By default this AUTOMATICALLY "
+                    + "clones the Function's most recent version - whatever its status, including a FAILED one - "
+                    + "carrying forward its source files, env vars, secrets, and attached databases into the new "
+                    + "DRAFT. This is the fix-forward path after a FAILED build: call this again, then "
+                    + "get_function_version_source to see exactly what was carried forward, then "
+                    + "submit_function_version_source with only the correction applied (still a full-file "
+                    + "submission - it replaces the whole set - just start from what was cloned instead of "
+                    + "regenerating everything from scratch), then deploy_function_version. Pass "
+                    + "cloneFromVersionId to clone a specific earlier version instead of the latest, or "
+                    + "startEmpty=true for a genuinely blank DRAFT with no source/config."
     )
     public FunctionVersionResponse createFunctionVersion(
             @McpToolParam(description = "Function id (UUID)") String functionId,
             @McpToolParam(description = "Runtime: NODE (runs your handler code) or STATIC (serves a pre-built "
-                    + "static site's files directly, no code execution) - optional, defaults to the parent "
-                    + "Function's own runtime", required = false) String runtime,
-            @McpToolParam(description = "Free-form metadata string - optional", required = false) String metadata
+                    + "static site's files directly, no code execution) - optional, defaults to the cloned "
+                    + "version's runtime, or the parent Function's own runtime if there is nothing to clone",
+                    required = false) String runtime,
+            @McpToolParam(description = "Free-form metadata string - optional, never cloned from a prior version",
+                    required = false) String metadata,
+            @McpToolParam(description = "Clone this specific prior FunctionVersion id (UUID) instead of the "
+                    + "Function's most recent version - optional", required = false) String cloneFromVersionId,
+            @McpToolParam(description = "true creates a genuinely empty DRAFT with no source/config, opting out "
+                    + "of the default auto-clone - optional, defaults to false", required = false) Boolean startEmpty
     ) {
-        FunctionVersion version = functionVersionService.createDraftVersion(
-                CurrentMcpUser.id(), UUID.fromString(functionId), new FunctionVersionCreateRequest(runtime, metadata));
+        FunctionVersion version = functionVersionCloneService.createDraftVersion(
+                CurrentMcpUser.id(), UUID.fromString(functionId), new FunctionVersionCreateRequest(
+                        runtime, metadata,
+                        cloneFromVersionId != null ? UUID.fromString(cloneFromVersionId) : null,
+                        startEmpty));
         return functionVersionMapper.toResponse(version);
     }
 
@@ -190,11 +211,14 @@ public class FunctionVersionMcpTools {
 
     @McpTool(
             name = "deploy_function_version",
-            description = "Build and deploy a DRAFT FunctionVersion that already has source submitted, moving it to "
-                    + "PUBLISHING then READY (or FAILED with build error detail in this call's own error message). "
-                    + "That error message is the only place a failure's detail is shown live - call "
-                    + "get_function_version_build_logs afterward (any time later, not just right away) to see the "
-                    + "full stdout/stderr of every build stage that ran, persisted durably."
+            description = "Start building and deploying a DRAFT FunctionVersion that already has source submitted. "
+                    + "Returns immediately once the version is durably PUBLISHING - it does NOT wait for the build "
+                    + "to finish, since a real build can take several minutes. Poll get_function_version afterward "
+                    + "to see the version reach READY or FAILED, and call get_function_version_build_logs (any time, "
+                    + "including after it fails) for the full stdout/stderr of every build stage that ran. A FAILED "
+                    + "version cannot be redeployed in place - call create_function_version again (it automatically "
+                    + "clones this version's source/config) and fix only what caused the failure, rather than "
+                    + "resubmitting everything from scratch."
     )
     public FunctionVersionResponse deployFunctionVersion(
             @McpToolParam(description = "Function id (UUID)") String functionId,

@@ -41,6 +41,28 @@ public class FunctionVersionConfigService {
         return toResponse(functionVersion);
     }
 
+    /**
+     * Copies every env var and secret from {@code source} onto {@code target}
+     * - used by {@code FunctionVersionCloneService} when a new version is
+     * auto-seeded from the Function's most recent version. Secrets are
+     * re-encrypted under the target version's own OpenBao path (read back via
+     * {@link FunctionSecretStore#readSecretValue}, then written fresh via
+     * {@link FunctionSecretStore#save}) rather than sharing the source
+     * version's secret ref, since each version's secrets are independently
+     * addressed by its own id.
+     */
+    @Transactional
+    public void cloneConfig(FunctionVersion source, FunctionVersion target) {
+        for (FunctionVersionEnvVar envVar : envVarRepository.findAllByFunctionVersion_IdOrderByKeyAsc(source.getId())) {
+            envVarRepository.save(FunctionVersionEnvVar.create(target, envVar.getKey(), envVar.getValue()));
+        }
+        for (FunctionVersionSecret secret : secretRepository.findAllByFunctionVersion_IdOrderByKeyAsc(source.getId())) {
+            String value = functionSecretStore.readSecretValue(secret.getSecretRef());
+            String newSecretRef = functionSecretStore.save(target.getId(), secret.getKey(), value);
+            secretRepository.save(FunctionVersionSecret.create(target, secret.getKey(), newSecretRef));
+        }
+    }
+
     @Transactional
     public FunctionVersionConfigResponse upsertEnvVar(
             UUID appUserId,

@@ -13,6 +13,7 @@ import com.funchole.backend.controlplane.entity.SourceBundle;
 import com.funchole.backend.controlplane.entity.SourceFile;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspaceService;
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilder;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilderRegistry;
@@ -117,13 +118,19 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(
                 new PublishedArtifact(functionVersion.getId(), objectKey, SHA256_A, SIZE_A));
 
-        FunctionVersion deployed = service(publisher).deploy(functionVersion.getId());
+        // Not asserting on deploy()'s own return value here: with the
+        // direct/same-thread executor this suite uses, the pipeline shares
+        // this test's single transaction, so Hibernate's identity map hands
+        // back the very same managed entity later mutated to READY - an
+        // artifact of that shared-transaction test setup, not something a
+        // real (different-thread) caller could rely on. The persisted state
+        // below is what actually matters.
+        service(publisher).deploy(functionVersion.getId());
 
         assertThat(publisher.invocationCount()).isEqualTo(1);
-        assertThat(deployed.getStatus()).isEqualTo(FunctionVersionStatus.READY);
-        assertThat(functionVersionRepository.findById(functionVersion.getId()).orElseThrow().getStatus())
-                .isEqualTo(FunctionVersionStatus.READY);
-        assertThat(deployed.getArtifactMetadata()).hasValueSatisfying(metadata -> {
+        FunctionVersion retrieved = functionVersionRepository.findById(functionVersion.getId()).orElseThrow();
+        assertThat(retrieved.getStatus()).isEqualTo(FunctionVersionStatus.READY);
+        assertThat(retrieved.getArtifactMetadata()).hasValueSatisfying(metadata -> {
             assertThat(metadata.objectKey()).isEqualTo(objectKey);
             assertThat(metadata.sha256()).isEqualTo(SHA256_A);
             assertThat(metadata.sizeBytes()).isEqualTo(SIZE_A);
@@ -153,9 +160,11 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.throwing(
                 new IllegalStateException("simulated upload failure"));
 
-        assertThatThrownBy(() -> service(publisher).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("simulated upload failure");
+        // The pipeline runs asynchronously now, so this failure is caught
+        // and logged inside it rather than thrown back to this caller (see
+        // FunctionVersionDeploymentService.runBuildPipeline) - only its
+        // effect on persisted state is observable here.
+        service(publisher).deploy(functionVersion.getId());
 
         FunctionVersion retrieved = functionVersionRepository.findById(functionVersion.getId()).orElseThrow();
         assertThat(retrieved.getStatus()).isEqualTo(FunctionVersionStatus.FAILED);
@@ -173,8 +182,7 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(
                 new PublishedArtifact(functionVersion.getId(), objectKey, "not-a-valid-sha256", SIZE_A));
 
-        assertThatThrownBy(() -> service(publisher).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalArgumentException.class);
+        service(publisher).deploy(functionVersion.getId());
 
         FunctionVersion retrieved = functionVersionRepository.findById(functionVersion.getId()).orElseThrow();
         assertThat(retrieved.getStatus()).isEqualTo(FunctionVersionStatus.FAILED);
@@ -208,9 +216,7 @@ class FunctionVersionDeploymentServiceTests {
                 () -> lifecycleRegistry.markReady(functionVersion.getId()),
                 new PublishedArtifact(functionVersion.getId(), objectKey, SHA256_A, SIZE_A));
 
-        assertThatThrownBy(() -> service(publisher).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("must be PUBLISHING");
+        service(publisher).deploy(functionVersion.getId());
 
         assertThat(publisher.deletionCount()).isEqualTo(1);
         assertThat(publisher.lastDeletedObjectKey()).isEqualTo(objectKey);
@@ -222,7 +228,7 @@ class FunctionVersionDeploymentServiceTests {
     }
 
     @Test
-    void cleanupFailureIsAddedAsASuppressedExceptionAndOriginalFailureRemainsPrimary() {
+    void cleanupFailureDoesNotPreventFailedStatus() {
         FunctionVersion functionVersion = createFunctionVersion();
         String objectKey = FunctionVersionArtifactRegistry.artifactObjectKey(functionVersion.getId());
         RuntimeException deleteFailure = new IllegalStateException("simulated delete failure");
@@ -232,9 +238,12 @@ class FunctionVersionDeploymentServiceTests {
                 new PublishedArtifact(functionVersion.getId(), objectKey, "not-a-valid-sha256", SIZE_A))
                 .withDeleteFailure(deleteFailure);
 
-        assertThatThrownBy(() -> service(publisher).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .satisfies(thrown -> assertThat(thrown.getSuppressed()).containsExactly(deleteFailure));
+        // The original failure and this compensating delete failure are both
+        // caught inside the async pipeline (the original with the delete
+        // failure suppressed onto it, exactly as before) and only logged -
+        // neither is thrown back to this caller anymore, so what remains
+        // observable here is the resulting persisted state.
+        service(publisher).deploy(functionVersion.getId());
 
         assertThat(publisher.deletionCount()).isEqualTo(1);
         assertThat(functionVersionRepository.findById(functionVersion.getId()).orElseThrow().getStatus())
@@ -242,7 +251,7 @@ class FunctionVersionDeploymentServiceTests {
     }
 
     @Test
-    void originalPublishExceptionIsPreservedIfMarkFailedAlsoFails() {
+    void publishFailureAfterForcedReadyLeavesVersionReady() {
         FunctionVersion functionVersion = createFunctionVersion();
         IllegalStateException originalFailure = new IllegalStateException("simulated publish failure");
         // Moves the version out of PUBLISHING before throwing, so the deployment
@@ -250,14 +259,13 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.throwingAfter(
                 () -> lifecycleRegistry.markReady(functionVersion.getId()), originalFailure);
 
-        assertThatThrownBy(() -> service(publisher).deploy(functionVersion.getId()))
-                .isSameAs(originalFailure)
-                .satisfies(thrown -> {
-                    assertThat(thrown.getSuppressed()).hasSize(1);
-                    assertThat(thrown.getSuppressed()[0])
-                            .isInstanceOf(IllegalStateException.class)
-                            .hasMessageContaining("must be PUBLISHING");
-                });
+        // Both the original publish failure and the subsequent markFailed
+        // failure are caught and only logged by the async pipeline, so the
+        // version is simply left at whatever the forced markReady set it to.
+        service(publisher).deploy(functionVersion.getId());
+
+        assertThat(functionVersionRepository.findById(functionVersion.getId()).orElseThrow().getStatus())
+                .isEqualTo(FunctionVersionStatus.READY);
     }
 
     @Test
@@ -321,8 +329,7 @@ class FunctionVersionDeploymentServiceTests {
                 SIZE_A
         ));
 
-        assertThatThrownBy(() -> service(publisher).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalStateException.class);
+        service(publisher).deploy(functionVersion.getId());
 
         FunctionVersion retrieved = functionVersionRepository.findById(functionVersion.getId()).orElseThrow();
         assertThat(retrieved.getStatus()).isEqualTo(FunctionVersionStatus.FAILED);
@@ -337,9 +344,8 @@ class FunctionVersionDeploymentServiceTests {
 
         service(RecordingArtifactPublisher.returning(new PublishedArtifact(versionOne.getId(), objectKeyOne, SHA256_A, SIZE_A)))
                 .deploy(versionOne.getId());
-        assertThatThrownBy(() -> service(RecordingArtifactPublisher.throwing(new IllegalStateException("boom")))
-                .deploy(versionTwo.getId()))
-                .isInstanceOf(IllegalStateException.class);
+        service(RecordingArtifactPublisher.throwing(new IllegalStateException("boom")))
+                .deploy(versionTwo.getId());
 
         assertThat(functionVersionRepository.findById(versionOne.getId()).orElseThrow().getStatus())
                 .isEqualTo(FunctionVersionStatus.READY);
@@ -382,7 +388,8 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(new PublishedArtifact(
                 functionVersion.getId(), FunctionVersionArtifactRegistry.artifactObjectKey(functionVersion.getId()), SHA256_A, SIZE_A));
         FunctionVersionDeploymentService service = new FunctionVersionDeploymentService(
-                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
+                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry,
+                buildLogService, DIRECT_EXECUTOR);
 
         service.deploy(functionVersion.getId());
 
@@ -433,9 +440,7 @@ class FunctionVersionDeploymentServiceTests {
                 RecordingRuntimeBuilder.throwing("NODE", new IllegalStateException("simulated build failure"));
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(null);
 
-        assertThatThrownBy(() -> service(publisher, failingBuilder).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("simulated build failure");
+        service(publisher, failingBuilder).deploy(functionVersion.getId());
 
         assertThat(publisher.invocationCount()).isZero();
         assertThat(functionVersionRepository.findById(functionVersion.getId()).orElseThrow().getStatus())
@@ -452,8 +457,7 @@ class FunctionVersionDeploymentServiceTests {
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.throwing(
                 new IllegalStateException("simulated upload failure"));
 
-        assertThatThrownBy(() -> service(publisher, builder).deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalStateException.class);
+        service(publisher, builder).deploy(functionVersion.getId());
 
         assertThat(Files.exists(builder.receivedWorkspaces().get(0).root())).isFalse();
         assertThat(Files.exists(builder.lastArtifactDirectory())).isFalse();
@@ -467,16 +471,27 @@ class FunctionVersionDeploymentServiceTests {
         RuntimeBuilderRegistry registry = new RuntimeBuilderRegistry(List.of(RecordingRuntimeBuilder.supporting("NODE")));
         RecordingArtifactPublisher publisher = RecordingArtifactPublisher.returning(null);
         FunctionVersionDeploymentService service = new FunctionVersionDeploymentService(
-                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
+                buildWorkspaceService, registry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry,
+                buildLogService, DIRECT_EXECUTOR);
 
-        assertThatThrownBy(() -> service.deploy(functionVersion.getId()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("COBOL");
+        // Runtime resolution now happens inside the async pipeline, so the
+        // failure is no longer thrown back to this caller (see
+        // FunctionVersionDeploymentService.runBuildPipeline) - only its
+        // effect (FAILED status, publisher never invoked) is observable.
+        service.deploy(functionVersion.getId());
 
         assertThat(publisher.invocationCount()).isZero();
         assertThat(functionVersionRepository.findById(functionVersion.getId()).orElseThrow().getStatus())
                 .isEqualTo(FunctionVersionStatus.FAILED);
     }
+
+    // deploy() now hands the build/publish pipeline to an Executor and
+    // returns immediately (see FunctionVersionDeploymentService); a direct,
+    // same-thread Executor keeps the rest of this suite deterministic and
+    // able to run inside the class's @Transactional test wrapper (a real
+    // background thread would use its own DB connection/transaction and
+    // never see this test method's uncommitted rows).
+    private static final FunctionBuildExecutor DIRECT_EXECUTOR = Runnable::run;
 
     private FunctionVersionDeploymentService service(ArtifactPublisher publisher) {
         return service(publisher, RecordingRuntimeBuilder.supporting("NODE"));
@@ -485,7 +500,7 @@ class FunctionVersionDeploymentServiceTests {
     private FunctionVersionDeploymentService service(ArtifactPublisher publisher, RuntimeBuilder runtimeBuilder) {
         return new FunctionVersionDeploymentService(
                 buildWorkspaceService, new RuntimeBuilderRegistry(List.of(runtimeBuilder)), publisher,
-                deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
+                deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService, DIRECT_EXECUTOR);
     }
 
     private FunctionVersion createFunctionVersion() {

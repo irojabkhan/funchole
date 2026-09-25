@@ -12,6 +12,7 @@ import com.funchole.backend.controlplane.entity.FunctionVersion;
 import com.funchole.backend.controlplane.entity.SourceBundle;
 import com.funchole.backend.controlplane.entity.SourceFile;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspaceService;
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilderRegistry;
 import com.funchole.backend.controlplane.repository.AppUserRepository;
 import com.funchole.backend.controlplane.repository.FunctionRepository;
@@ -202,8 +203,15 @@ class FunctionVersionLifecycleRegistryTests {
         String objectKey = FunctionVersionArtifactRegistry.artifactObjectKey(functionVersionId);
         CountingArtifactPublisher publisher = new CountingArtifactPublisher(
                 new PublishedArtifact(functionVersionId, objectKey, SHA256_A, SIZE_A));
+        // deploy() hands its build/publish pipeline to an Executor and
+        // returns immediately (see FunctionVersionDeploymentService); a
+        // direct, same-thread Executor keeps the pipeline running inline on
+        // each of this test's own racing worker threads below, exactly as
+        // it did before deploy() became async.
+        FunctionBuildExecutor directExecutor = Runnable::run;
         FunctionVersionDeploymentService service = new FunctionVersionDeploymentService(
-                buildWorkspaceService, runtimeBuilderRegistry, publisher, deploymentFinalizer, artifactRegistry, lifecycleRegistry, buildLogService);
+                buildWorkspaceService, runtimeBuilderRegistry, publisher, deploymentFinalizer, artifactRegistry,
+                lifecycleRegistry, buildLogService, directExecutor);
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch start = new CountDownLatch(1);
         Callable<FunctionVersion> attempt = () -> {

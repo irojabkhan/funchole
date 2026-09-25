@@ -6,10 +6,13 @@ import com.funchole.backend.controlplane.entity.FunctionVersion;
 import com.funchole.backend.controlplane.functionbuild.BuildLogRecorder;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspace;
 import com.funchole.backend.controlplane.functionbuild.BuildWorkspaceService;
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.funchole.backend.controlplane.functionbuild.PreparedArtifact;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilder;
 import com.funchole.backend.controlplane.functionbuild.RuntimeBuilderRegistry;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,6 +27,14 @@ import org.springframework.stereotype.Service;
  *                     -&gt; READY
  *                     \-&gt; (any failure above) -&gt;----------------------------------&gt; FAILED
  * </pre>
+ *
+ * <p>Only the DRAFT -&gt; PUBLISHING transition (via {@link FunctionVersionLifecycleRegistry#beginPublishing})
+ * runs synchronously inside {@link #deploy}; everything from workspace
+ * preparation through finalization runs afterward on a small bounded
+ * background executor ({@code FunctionBuildExecutorConfig}), since a real
+ * build can take minutes. Callers get an immediate PUBLISHING response and
+ * poll {@code get_function_version}/{@code get_function_version_build_logs}
+ * for progress and outcome.
  *
  * This class holds no build logic itself - it only sequences its
  * collaborators and validates the hand-offs between them: source
@@ -53,6 +64,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class FunctionVersionDeploymentService {
 
+    private static final Logger logger = LoggerFactory.getLogger(FunctionVersionDeploymentService.class);
+
     private final BuildWorkspaceService buildWorkspaceService;
     private final RuntimeBuilderRegistry runtimeBuilderRegistry;
     private final ArtifactPublisher artifactPublisher;
@@ -60,6 +73,7 @@ public class FunctionVersionDeploymentService {
     private final FunctionVersionArtifactRegistry artifactRegistry;
     private final FunctionVersionLifecycleRegistry lifecycleRegistry;
     private final FunctionVersionBuildLogService buildLogService;
+    private final FunctionBuildExecutor buildExecutor;
 
     public FunctionVersionDeploymentService(
             BuildWorkspaceService buildWorkspaceService,
@@ -68,7 +82,8 @@ public class FunctionVersionDeploymentService {
             FunctionVersionDeploymentFinalizer deploymentFinalizer,
             FunctionVersionArtifactRegistry artifactRegistry,
             FunctionVersionLifecycleRegistry lifecycleRegistry,
-            FunctionVersionBuildLogService buildLogService
+            FunctionVersionBuildLogService buildLogService,
+            FunctionBuildExecutor buildExecutor
     ) {
         this.buildWorkspaceService = buildWorkspaceService;
         this.runtimeBuilderRegistry = runtimeBuilderRegistry;
@@ -77,8 +92,17 @@ public class FunctionVersionDeploymentService {
         this.artifactRegistry = artifactRegistry;
         this.lifecycleRegistry = lifecycleRegistry;
         this.buildLogService = buildLogService;
+        this.buildExecutor = buildExecutor;
     }
 
+    /**
+     * Validates and starts deployment, returning as soon as the version is
+     * durably PUBLISHING - not once the build has finished. The slow
+     * build/publish pipeline ({@link #runBuildPipeline}) is handed to
+     * {@link #buildExecutor} and runs in the background; callers must poll
+     * {@code get_function_version}/{@code get_function_version_build_logs}
+     * to observe its outcome.
+     */
     public FunctionVersion deploy(UUID functionVersionId) {
         // Checked before the version ever enters PUBLISHING, so an
         // already-published version is rejected without touching status,
@@ -91,9 +115,24 @@ public class FunctionVersionDeploymentService {
 
         // Persisted immediately, in its own transaction, before any build or
         // publish work starts - rejects deployment when already PUBLISHING,
-        // READY, or FAILED (FAILED stays terminal: no retry path yet).
+        // READY, or FAILED (FAILED stays terminal: no retry path yet). This
+        // is the only part of deployment the caller waits on.
         FunctionVersion functionVersion = lifecycleRegistry.beginPublishing(functionVersionId);
 
+        buildExecutor.execute(() -> runBuildPipeline(functionVersionId, functionVersion));
+
+        return functionVersion;
+    }
+
+    /**
+     * Runs entirely on {@link #buildExecutor}, after {@link #deploy} has
+     * already returned to its caller. Any failure here is caught, logged,
+     * and turned into compensation + a FAILED status - never rethrown, since
+     * there is no caller left in this call stack to receive it; the failure
+     * detail lives in the build logs ({@link FunctionVersionBuildLogService})
+     * and the FAILED status itself, both of which are pollable afterward.
+     */
+    private void runBuildPipeline(UUID functionVersionId, FunctionVersion functionVersion) {
         // Assigned only once publish() has actually returned a value - the
         // signal that a remote artifact now exists and, if anything later
         // fails, needs to be compensated for.
@@ -112,14 +151,15 @@ public class FunctionVersionDeploymentService {
             // transaction. Any failure rolls back all local changes; the catch
             // block below then compensates for the already-published remote
             // artifact and marks the version FAILED.
-            return deploymentFinalizer.finalizeDeployment(functionVersionId, published);
+            deploymentFinalizer.finalizeDeployment(functionVersionId, published);
         } catch (RuntimeException exception) {
+            logger.warn("Function version build/publish pipeline failed: functionVersionId={}", functionVersionId, exception);
             if (published != null) {
                 try {
                     artifactPublisher.delete(functionVersionId, published.objectKey());
                 } catch (RuntimeException deleteException) {
                     // Same pattern as markFailed below: the original deployment
-                    // failure is what the caller needs to see, not a failure to
+                    // failure is what matters for diagnosis, not a failure to
                     // clean up after it.
                     exception.addSuppressed(deleteException);
                 }
@@ -129,7 +169,6 @@ public class FunctionVersionDeploymentService {
             } catch (RuntimeException markFailedException) {
                 exception.addSuppressed(markFailedException);
             }
-            throw exception;
         }
     }
 }

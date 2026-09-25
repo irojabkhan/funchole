@@ -5,6 +5,7 @@ import com.funchole.backend.controlplane.dto.FunctionVersionResponse;
 import com.funchole.backend.controlplane.entity.FunctionVersion;
 import com.funchole.backend.controlplane.mapper.FunctionVersionMapper;
 import com.funchole.backend.controlplane.security.AppUserPrincipal;
+import com.funchole.backend.controlplane.service.FunctionVersionCloneService;
 import com.funchole.backend.controlplane.service.FunctionVersionService;
 import com.funchole.backend.core.base.mapper.PaginationMapper;
 import com.funchole.backend.core.base.response.ApiResponse;
@@ -26,15 +27,18 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/functions/{functionId}/versions")
 public class FunctionVersionController {
     private final FunctionVersionService functionVersionService;
+    private final FunctionVersionCloneService functionVersionCloneService;
     private final FunctionVersionMapper functionVersionMapper;
     private final PaginationMapper paginationMapper;
 
     public FunctionVersionController(
             FunctionVersionService functionVersionService,
+            FunctionVersionCloneService functionVersionCloneService,
             FunctionVersionMapper functionVersionMapper,
             PaginationMapper paginationMapper
     ) {
         this.functionVersionService = functionVersionService;
+        this.functionVersionCloneService = functionVersionCloneService;
         this.functionVersionMapper = functionVersionMapper;
         this.paginationMapper = paginationMapper;
     }
@@ -71,7 +75,7 @@ public class FunctionVersionController {
             @PathVariable UUID functionId,
             @Valid @RequestBody FunctionVersionCreateRequest request
     ) {
-        FunctionVersion functionVersion = functionVersionService.createDraftVersion(appUserPrincipal.getId(), functionId, request);
+        FunctionVersion functionVersion = functionVersionCloneService.createDraftVersion(appUserPrincipal.getId(), functionId, request);
         return ApiResponse.success(functionVersionMapper.toResponse(functionVersion));
     }
 }

@@ -6,12 +6,16 @@ import com.funchole.backend.controlplane.entity.SourceBundle;
 import com.funchole.backend.controlplane.entity.SourceFile;
 import com.funchole.backend.controlplane.repository.FunctionVersionRepository;
 import com.funchole.backend.controlplane.service.FunctionVersionSourceService;
+import com.funchole.backend.controlplane.util.ConcurrentIo;
 import com.funchole.backend.core.base.exception.ResourceNotFoundException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,9 +87,8 @@ public class BuildWorkspaceService {
     BuildWorkspace materialize(UUID functionVersionId, SourceBundle sourceBundle) {
         Path workspaceRoot = createWorkspaceDirectory(functionVersionId);
         try {
-            for (SourceFile file : sourceBundle.files()) {
-                writeIntoWorkspace(workspaceRoot, file);
-            }
+            createParentDirectories(workspaceRoot, sourceBundle.files());
+            ConcurrentIo.forEach(sourceBundle.files(), file -> writeIntoWorkspace(workspaceRoot, file));
             Path entrypointPath = resolveWithinWorkspace(workspaceRoot, sourceBundle.entrypoint());
             if (!Files.isRegularFile(entrypointPath)) {
                 throw new IllegalStateException(
@@ -131,10 +134,27 @@ public class BuildWorkspaceService {
         }
     }
 
+    // Directory creation is not safely parallelizable when several files
+    // share a parent directory, so parent directories are created
+    // sequentially up front; the file writes below have no such dependency
+    // between them and run concurrently (see ConcurrentIo).
+    private void createParentDirectories(Path workspaceRoot, List<SourceFile> files) {
+        try {
+            Set<Path> parents = new LinkedHashSet<>();
+            for (SourceFile file : files) {
+                parents.add(resolveWithinWorkspace(workspaceRoot, file.relativePath()).getParent());
+            }
+            for (Path parent : parents) {
+                Files.createDirectories(parent);
+            }
+        } catch (IOException exception) {
+            throw new UncheckedIOException("Failed to prepare build workspace directories", exception);
+        }
+    }
+
     private void writeIntoWorkspace(Path workspaceRoot, SourceFile file) {
         Path target = resolveWithinWorkspace(workspaceRoot, file.relativePath());
         try {
-            Files.createDirectories(target.getParent());
             Files.writeString(target, file.content());
         } catch (IOException exception) {
             throw new UncheckedIOException("Failed to materialize source file: " + file.relativePath(), exception);

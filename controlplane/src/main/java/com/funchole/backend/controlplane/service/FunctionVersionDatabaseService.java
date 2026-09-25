@@ -36,6 +36,21 @@ public class FunctionVersionDatabaseService {
                 .toList();
     }
 
+    /**
+     * Copies every Database attachment from {@code source} onto {@code target}
+     * - used by {@code FunctionVersionCloneService} when a new version is
+     * auto-seeded from the Function's most recent version. Each attachment
+     * row just links to the same {@link Database}; nothing about the
+     * Database itself is copied or re-provisioned.
+     */
+    @Transactional
+    public void cloneAttachments(FunctionVersion source, FunctionVersion target) {
+        for (FunctionVersionDatabaseAttachment attachment :
+                attachmentRepository.findAllByFunctionVersion_IdOrderByCreatedAtAsc(source.getId())) {
+            attachmentRepository.save(FunctionVersionDatabaseAttachment.create(target, attachment.getDatabase()));
+        }
+    }
+
     @Transactional
     public List<FunctionVersionDatabaseAttachmentResponse> attachDatabase(
             UUID appUserId,

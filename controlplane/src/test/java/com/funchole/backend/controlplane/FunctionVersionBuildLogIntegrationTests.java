@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.funchole.backend.controlplane.functionbuild.process.ProcessExecutor;
 import com.funchole.backend.controlplane.functionbuild.process.ProcessResult;
 import com.jayway.jsonpath.JsonPath;
@@ -99,7 +100,7 @@ class FunctionVersionBuildLogIntegrationTests {
     }
 
     @Test
-    void failedDependencyInstallIsPersistedWithFullStderrEvenThoughTheDeployItselfFails() throws Exception {
+    void failedDependencyInstallIsPersistedWithFullStderrEvenThoughTheBuildFails() throws Exception {
         String functionId = createFunction("NODE");
         String versionId = createDraftVersion(functionId);
         submitSource(functionId, versionId, "index.mjs",
@@ -109,9 +110,12 @@ class FunctionVersionBuildLogIntegrationTests {
         // MCP_TESTING_FEEDBACK.md item 10 - before its own separate fix).
         FAKE_PROCESS_EXECUTOR.nextResult(new ProcessResult(1, "", "npm: command not found", false));
 
-        deploy(functionId, versionId)
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.details[0]").value("stage: dependency-install"));
+        // deploy() itself no longer surfaces a build failure synchronously -
+        // it only starts the (now-async) pipeline, see
+        // FunctionVersionDeploymentService - so this returns 200 even though
+        // the build fails moments later; the failure detail lives in the
+        // build logs and the version's own FAILED status, both checked below.
+        deploy(functionId, versionId).andExpect(status().isOk());
 
         List<Map<String, Object>> logs = readBuildLogs(functionId, versionId);
         assertThat(logs).hasSize(1);
@@ -208,6 +212,17 @@ class FunctionVersionBuildLogIntegrationTests {
         @Primary
         ProcessExecutor processExecutor() {
             return FAKE_PROCESS_EXECUTOR;
+        }
+
+        // deploy() hands its build/publish pipeline to a FunctionBuildExecutor
+        // and returns immediately (see FunctionVersionDeploymentService); a
+        // same-thread executor keeps this suite's straight-line
+        // deploy-then-assert calls deterministic instead of racing the real
+        // bounded background pool.
+        @Bean
+        @Primary
+        FunctionBuildExecutor synchronousFunctionBuildExecutor() {
+            return Runnable::run;
         }
     }
 

@@ -11,6 +11,7 @@ import com.funchole.backend.controlplane.entity.SourceFile;
 import com.funchole.backend.controlplane.repository.FunctionVersionRepository;
 import com.funchole.backend.controlplane.repository.FunctionVersionSourceRepository;
 import com.funchole.backend.core.base.exception.ResourceNotFoundException;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -40,6 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class FunctionVersionSourceService {
 
     private static final String DEFAULT_HANDLER = "handler";
+    // Mirrors the REST multipart endpoint's spring.servlet.multipart.max-file-size
+    // (application.yml) - the MCP path has no transport-level cap of its own,
+    // so this is the app-level equivalent, giving a clear error instead of a
+    // raw transport/memory failure for an oversized submission.
+    private static final long MAX_TOTAL_SOURCE_BYTES = 25L * 1024 * 1024;
 
     private final FunctionVersionRepository functionVersionRepository;
     private final FunctionVersionSourceRepository functionVersionSourceRepository;
@@ -133,11 +139,18 @@ public class FunctionVersionSourceService {
         }
 
         Set<String> relativePaths = new HashSet<>();
+        long totalBytes = 0;
         for (SourceFile file : files) {
             validateRelativePath(file.relativePath());
             if (!relativePaths.add(file.relativePath())) {
                 throw new IllegalArgumentException("duplicate source file path: " + file.relativePath());
             }
+            totalBytes += file.content() == null ? 0 : file.content().getBytes(StandardCharsets.UTF_8).length;
+        }
+        if (totalBytes > MAX_TOTAL_SOURCE_BYTES) {
+            throw new IllegalArgumentException(
+                    "submitted source is too large: " + totalBytes + " bytes across " + files.size()
+                            + " files exceeds the " + MAX_TOTAL_SOURCE_BYTES + " byte limit");
         }
 
         String entrypoint = sourceBundle.entrypoint();

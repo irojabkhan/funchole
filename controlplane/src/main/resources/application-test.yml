@@ -4,6 +4,22 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+  datasource:
+    # Every distinct @TestConfiguration variant across this suite produces its
+    # own cached Spring context (Spring's context cache keeps each one open
+    # for the rest of the run, not just its own test class), and each context
+    # gets its own HikariCP pool against the SAME real local Postgres (this
+    # suite is not Testcontainers-backed - see application.yml's DB_URL
+    # default). With dozens of distinct contexts now in this suite, the
+    # default pool size (10) adds up past Postgres's default
+    # max_connections=100, causing real "sorry, too many clients already"
+    # failures against the shared local `db` container. A small pool per
+    # context keeps the cumulative total well under that limit; MockMvc tests
+    # are effectively single-threaded per context anyway, so they don't need
+    # a large pool.
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
 
 app:
   source:

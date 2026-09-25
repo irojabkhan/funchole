@@ -24,6 +24,15 @@ public interface FunctionVersionRepository extends JpaRepository<FunctionVersion
     int findMaxVersion(@Param("functionId") UUID functionId);
 
     /**
+     * The Function's own most recently created version, whatever its status -
+     * used to auto-seed a new DRAFT version's source/config
+     * ({@code FunctionVersionCloneService}), so a fix-forward iteration
+     * clones the last attempt (including a FAILED one) rather than starting
+     * from nothing.
+     */
+    Optional<FunctionVersion> findFirstByFunction_IdOrderByVersionDesc(UUID functionId);
+
+    /**
      * Atomic compare-and-swap: flips {@code status} to {@code newStatus} only
      * if it is currently exactly {@code expectedStatus}, as a single
      * database-level conditional UPDATE. Returns the number of rows changed

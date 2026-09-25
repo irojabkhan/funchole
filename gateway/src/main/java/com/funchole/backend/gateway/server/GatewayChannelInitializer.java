@@ -9,6 +9,13 @@ import io.netty.handler.ssl.SniHandler;
 
 public class GatewayChannelInitializer extends ChannelInitializer<SocketChannel> {
 
+    // Shared by all inbound Gateway traffic: tenant Function invocations AND
+    // the fixed-host-proxied public API/web traffic (FixedHostProxy), which
+    // includes large MCP source-submission payloads for multi-file apps -
+    // sized well above the controlplane REST multipart cap (25 MB) rather
+    // than the small tenant-invocation payloads this used to be tuned for.
+    private static final int MAX_INBOUND_REQUEST_BYTES = 32 * 1024 * 1024;
+
     private final GatewayHttpHandler gatewayHttpHandler;
     private final GatewayRegistry gatewayRegistry;
 
@@ -22,7 +29,7 @@ public class GatewayChannelInitializer extends ChannelInitializer<SocketChannel>
         channel.pipeline()
                 .addLast(new SniHandler(gatewayRegistry.sslContextMapping()))
                 .addLast(new HttpServerCodec())
-                .addLast(new HttpObjectAggregator(65536))
+                .addLast(new HttpObjectAggregator(MAX_INBOUND_REQUEST_BYTES))
                 .addLast(gatewayHttpHandler);
     }
 }

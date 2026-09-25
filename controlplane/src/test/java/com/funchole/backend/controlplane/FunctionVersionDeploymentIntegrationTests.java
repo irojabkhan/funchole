@@ -1,10 +1,12 @@
 package com.funchole.backend.controlplane;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.funchole.backend.controlplane.functionbuild.FunctionBuildExecutor;
 import com.jayway.jsonpath.JsonPath;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -15,7 +17,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -81,9 +86,18 @@ class FunctionVersionDeploymentIntegrationTests {
     void rejectsDeployingAVersionWithNoSourceSubmitted() throws Exception {
         String versionId = createDraftVersion();
 
+        // No source was submitted, so the (now-async) build pipeline fails
+        // once it starts - deploy() itself no longer surfaces that failure
+        // synchronously (see FunctionVersionDeploymentService), so this
+        // still returns 200; the resulting FAILED status is verified below.
         mockMvc.perform(post("/api/v1/functions/{functionId}/versions/{versionId}/deploy", functionId, versionId)
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/v1/functions/{functionId}/versions/{versionId}", functionId, versionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"));
     }
 
     @Test
@@ -147,5 +161,19 @@ class FunctionVersionDeploymentIntegrationTests {
                 .andExpect(status().isOk())
                 .andReturn();
         return JsonPath.read(result.getResponse().getContentAsString(), "$.data.accessToken");
+    }
+
+    @TestConfiguration
+    static class SynchronousBuildExecutorConfig {
+        // deploy() hands its build/publish pipeline to a FunctionBuildExecutor
+        // and returns immediately (see FunctionVersionDeploymentService); a
+        // same-thread executor keeps this suite's straight-line
+        // deploy-then-assert calls deterministic instead of racing the real
+        // bounded background pool.
+        @Bean
+        @Primary
+        FunctionBuildExecutor synchronousFunctionBuildExecutor() {
+            return Runnable::run;
+        }
     }
 }

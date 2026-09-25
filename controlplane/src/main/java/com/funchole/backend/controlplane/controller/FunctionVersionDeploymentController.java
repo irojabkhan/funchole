@@ -16,14 +16,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Triggers the existing build-&gt;publish-&gt;finalize pipeline
+ * Starts the existing build-&gt;publish-&gt;finalize pipeline
  * ({@link FunctionVersionDeploymentService}) for a DRAFT FunctionVersion
- * that already has source submitted. Ownership is verified here (the
- * deployment service itself is transport-neutral and knows nothing about
- * AppUser); the pipeline's own lifecycle guards (DRAFT-only, no
- * republishing) are enforced inside the service and surface as 409 Conflict
- * via {@code core.GlobalExceptionHandler}, and a build failure surfaces as
- * 422 with stage/exit-code/stdout/stderr detail via {@link BuildExceptionHandler}.
+ * that already has source submitted, and returns as soon as it is durably
+ * PUBLISHING - the pipeline itself then runs in the background (see that
+ * service's javadoc), so this response never carries a build outcome.
+ * Ownership is verified here (the deployment service itself is
+ * transport-neutral and knows nothing about AppUser); the pipeline's own
+ * lifecycle guards (DRAFT-only, no republishing) are enforced inside the
+ * service and surface synchronously as 409 Conflict via
+ * {@code core.GlobalExceptionHandler}. A build failure happens after this
+ * call has already returned, so it never reaches {@link BuildExceptionHandler}
+ * here - poll {@code GET .../versions/{versionId}} for the terminal status
+ * and the build-logs endpoint for stage detail instead.
  */
 @RestController
 @RequestMapping("/api/v1/functions/{functionId}/versions/{versionId}/deploy")

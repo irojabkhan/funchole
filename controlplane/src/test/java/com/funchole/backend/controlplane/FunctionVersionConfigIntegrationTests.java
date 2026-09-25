@@ -129,6 +129,35 @@ class FunctionVersionConfigIntegrationTests {
     }
 
     @Test
+    void newVersionClonesThePreviousVersionsSecretReEncryptedUnderItsOwnRef() throws Exception {
+        mockMvc.perform(put("/api/v1/functions/{functionId}/versions/{versionId}/config/secrets/API_TOKEN", functionId, versionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "value": "super-secret"
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        MvcResult createResult = mockMvc.perform(post("/api/v1/functions/{functionId}/versions", functionId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        String clonedVersionId = JsonPath.read(createResult.getResponse().getContentAsString(), "$.data.id");
+
+        mockMvc.perform(get("/api/v1/functions/{functionId}/versions/{versionId}/config", functionId, clonedVersionId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.secrets[0].key").value("API_TOKEN"))
+                .andExpect(jsonPath("$.data.secrets[0].secretRef")
+                        .value("function-versions/" + clonedVersionId + "/secrets/API_TOKEN"));
+        assertThat(SECRET_STORE.valueFor(UUID.fromString(clonedVersionId), "API_TOKEN")).isEqualTo("super-secret");
+    }
+
+    @Test
     void rejectsUsingSameKeyAsPlainEnvVarAndSecret() throws Exception {
         upsertEnv("API_TOKEN", "plain-token");
 
