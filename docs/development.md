@@ -241,34 +241,38 @@ To get a Client ID:
 
 Optional, and only relevant to the hosted cloud product (`app.funchole.dev`)
 - self-hosted installs should leave `CLOUD_MODE_ENABLED` unset and skip this
-section entirely. See `CLOUD_MODE_ENABLED`/`CLOUD_DEFAULT_DOMAIN_ID` in
+section entirely. See `CLOUD_MODE_ENABLED` in
 [docs/environment-variables.md](environment-variables.md) for what the flag
 does. Turning it on requires both Google Sign-In (above, but without an
 `ADMIN_ALLOWED_GOOGLE_EMAILS` restriction - any verified Google account may
-now self-register) and one manually-verified platform domain:
+now self-register) and at least one manually-verified admin domain:
 
 1. Follow the Google Sign-In Setup steps above to get a
    `GOOGLE_OAUTH_CLIENT_ID`. `ADMIN_ALLOWED_GOOGLE_EMAILS` can stay empty -
    it's ignored once `CLOUD_MODE_ENABLED=true`.
-2. Decide the domain new users' auto-provisioned default Gateways will live
-   under (e.g. `apps.funchole.dev`). This must be a real domain you control
-   DNS for - it's verified the same way any FuncHole domain is, through the
-   normal domain-creation flow (`create_domain`/`initiate_domain_verification`,
-   REST or MCP), signed in as your own admin account:
+2. Once `CLOUD_MODE_ENABLED=true`, `create_domain` only works for the
+   bootstrap admin account - every other user gets `ForbiddenException`
+   (403). As the admin, create and verify **one or more** real domains you
+   control DNS for, through the normal domain-creation flow
+   (`create_domain`/`initiate_domain_verification`, REST or MCP):
    1. Create the domain and note the TXT record FuncHole asks you to publish.
    2. Publish that TXT record with your DNS provider.
    3. Call `initiate_domain_verification` (or the equivalent REST endpoint)
       and confirm the domain's status becomes `VERIFIED`.
-   4. Note that domain's `id` (UUID) - this is your `CLOUD_DEFAULT_DOMAIN_ID`.
+   4. Repeat for as many domains as you want to spread tenant Gateways
+      across (e.g. to stay under per-domain Let's Encrypt rate limits) -
+      there's nothing else to configure per domain.
 3. Set in `.env` (see `.env.example`):
    ```
    CLOUD_MODE_ENABLED=true
-   CLOUD_DEFAULT_DOMAIN_ID=<the verified domain's UUID from step 2>
    ```
 4. Restart the stack. From this point, any verified Google sign-in that
    isn't already an existing account self-registers: a new `AppUser`,
    assigned the seeded `free` package, with one `Default Gateway`
-   auto-provisioned under `CLOUD_DEFAULT_DOMAIN_ID`.
+   auto-provisioned on a **randomly chosen** one of your verified admin
+   domains - same for any additional Gateway a non-admin user creates later
+   (up to their package's `MAX_GATEWAYS`). If no domain is `VERIFIED` yet,
+   sign-up fails with a clear error instead of silently picking nothing.
 
 The `free` package's limits (1 Gateway, 0 attachable Domains, 20 Flows, 100
 Functions) live in the `packages`/`package_limits` tables (seeded by

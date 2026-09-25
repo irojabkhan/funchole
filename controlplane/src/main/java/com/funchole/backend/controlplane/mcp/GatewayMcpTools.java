@@ -55,17 +55,21 @@ public class GatewayMcpTools {
     @McpTool(
             name = "create_gateway",
             description = "Create a new Gateway bound to a verified AppDomain - see create_domain first if you "
-                    + "don't have one yet. Create Flows under it next with create_flow."
+                    + "don't have one yet. Create Flows under it next with create_flow. appDomainId is required "
+                    + "for the admin account; other users (cloud product only) get a randomly chosen verified "
+                    + "domain automatically and can omit it."
     )
     public GatewayResponse createGateway(
             @McpToolParam(description = "Display name") String name,
             @McpToolParam(description = "Description", required = false) String description,
-            @McpToolParam(description = "AppDomain id (UUID) - see list_domains") String appDomainId,
+            @McpToolParam(description = "AppDomain id (UUID) - see list_domains. Admin only; other users omit this.", required = false)
+                    String appDomainId,
             @McpToolParam(description = "ACTIVE or INACTIVE") String status
     ) throws NotFoundException {
         AppUser appUser = profileService.loadUserById(CurrentMcpUser.id());
+        UUID appDomainUuid = appDomainId == null ? null : UUID.fromString(appDomainId);
         Gateway created = gatewayService.createGateway(appUser, new GatewayCreateRequest(
-                name, description, UUID.fromString(appDomainId), GatewayStatus.valueOf(status)));
+                name, description, appDomainUuid, GatewayStatus.valueOf(status)));
         return gatewayMapper.toResponse(created);
     }
 

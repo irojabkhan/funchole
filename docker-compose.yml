@@ -67,9 +67,11 @@ services:
       # unlimited self-hosted instance. See docs/development.md before
       # setting this true: it turns on real self-registration (any Google
       # account, not just the allowlist above) and package/quota
-      # enforcement, and needs CLOUD_DEFAULT_DOMAIN_ID configured too.
+      # enforcement. Only the bootstrap admin can create AppDomains once
+      # this is true - create and verify at least one domain as the admin
+      # first, since every other user's Gateway lands on a randomly chosen
+      # one of the admin's verified domains automatically.
       CLOUD_MODE_ENABLED: ${CLOUD_MODE_ENABLED:-false}
-      CLOUD_DEFAULT_DOMAIN_ID: ${CLOUD_DEFAULT_DOMAIN_ID:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:7080/actuator/health >/dev/null 2>&1"]
       interval: 5s

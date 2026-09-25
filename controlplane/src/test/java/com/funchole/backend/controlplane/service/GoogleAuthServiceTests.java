@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.funchole.backend.controlplane.config.CloudModeProperties;
-import com.funchole.backend.controlplane.config.CloudProvisioningProperties;
 import com.funchole.backend.controlplane.config.GoogleAuthProperties;
 import com.funchole.backend.controlplane.config.SecurityProperties;
 import com.funchole.backend.controlplane.constant.DomainStatus;
@@ -26,10 +25,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -43,10 +44,23 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * module's own established pattern) rather than hand-faking them, since
  * they're full {@code JpaRepository}/multi-collaborator services, not
  * small app-owned interfaces worth faking.
+ *
+ * <p>{@code @Transactional}: the cloud-mode tests build their own {@code
+ * GatewayService}/{@code CloudSignupService} instances (to scope {@code
+ * CloudModeProperties} per scenario) rather than using the app's real
+ * {@code @Autowired} beans, which bypasses Spring's {@code @Transactional}
+ * AOP proxying on {@code createGateway}/{@code signUp}. Without an ambient
+ * transaction here, each repository call inside that chain would open and
+ * close its own separate Hibernate session, and a later step (loading the
+ * Gateway's lazy {@code AppDomain} to build its certificate hostname) would
+ * fail with a cross-session {@code LazyInitializationException} - purely a
+ * test-construction artifact, not a production one, since production always
+ * calls through the real proxied beans.
  */
 @SpringBootTest
 @ActiveProfiles("test")
 @Testcontainers
+@Transactional
 class GoogleAuthServiceTests {
 
     @Container
@@ -72,7 +86,16 @@ class GoogleAuthServiceTests {
     private UserPackageRepository userPackageRepository;
 
     @Autowired
-    private GatewayService gatewayService;
+    private DomainService domainService;
+
+    @Autowired
+    private GatewayCertificateService gatewayCertificateService;
+
+    @Autowired
+    private ApplicationEventPublisher applicationEventPublisher;
+
+    @Autowired
+    private PackageLimitService packageLimitService;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -171,25 +194,43 @@ class GoogleAuthServiceTests {
 
     private GoogleAuthService selfHostedService(List<String> allowedEmails) {
         GoogleAuthProperties properties = new GoogleAuthProperties("test-client-id", allowedEmails);
-        CloudSignupService unusedOnThisPath = cloudSignupService(new CloudProvisioningProperties(""));
+        CloudSignupService unusedOnThisPath = cloudSignupService(false);
         return new GoogleAuthService(
                 null, properties, securityProperties, new CloudModeProperties(false),
                 appUserRepository, unusedOnThisPath, jwtService);
     }
 
+    /**
+     * {@code platformDomain} isn't wired anywhere directly anymore - its
+     * only job is to exist as a {@code VERIFIED} row before this is called,
+     * so {@code GatewayService.resolveDomainForNewGateway}'s random pick
+     * (exercised transitively through {@code CloudSignupService}) has at
+     * least one domain to choose from. Callers pass
+     * {@code cloudService(verifiedPlatformDomain())} to make that ordering
+     * explicit at the call site.
+     */
     private GoogleAuthService cloudService(AppDomain platformDomain) {
         GoogleAuthProperties properties = new GoogleAuthProperties("test-client-id", List.of());
-        CloudSignupService cloudSignupService = cloudSignupService(
-                new CloudProvisioningProperties(platformDomain.getId().toString()));
+        CloudSignupService cloudSignupService = cloudSignupService(true);
         return new GoogleAuthService(
                 null, properties, securityProperties, new CloudModeProperties(true),
                 appUserRepository, cloudSignupService, jwtService);
     }
 
-    private CloudSignupService cloudSignupService(CloudProvisioningProperties provisioningProperties) {
+    /**
+     * Builds its own {@code GatewayService} with a {@code CloudModeProperties}
+     * matching the caller's scenario, rather than using the app's real
+     * {@code @Autowired} bean (which reads the actual {@code CLOUD_MODE_ENABLED}
+     * config - always {@code false} in the test profile) - otherwise the
+     * cloud-mode self-registration tests below would silently exercise the
+     * self-hosted domain-resolution branch instead of the random-pick one.
+     */
+    private CloudSignupService cloudSignupService(boolean cloudModeEnabled) {
+        GatewayService scopedGatewayService = new GatewayService(
+                gatewayRepository, domainService, gatewayCertificateService, applicationEventPublisher,
+                packageLimitService, new CloudModeProperties(cloudModeEnabled), securityProperties);
         return new CloudSignupService(
-                appUserRepository, userPackageRepository, packageRepository, appDomainRepository,
-                gatewayService, passwordEncoder, provisioningProperties);
+                appUserRepository, userPackageRepository, packageRepository, scopedGatewayService, passwordEncoder);
     }
 
     private AppDomain verifiedPlatformDomain() {

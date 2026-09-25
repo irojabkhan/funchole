@@ -1,5 +1,7 @@
 package com.funchole.backend.controlplane.service;
 
+import com.funchole.backend.controlplane.config.CloudModeProperties;
+import com.funchole.backend.controlplane.config.SecurityProperties;
 import com.funchole.backend.controlplane.dto.GatewayCreateRequest;
 import com.funchole.backend.controlplane.dto.GatewayUpdateRequest;
 import com.funchole.backend.controlplane.constant.DomainStatus;
@@ -32,6 +34,8 @@ public class GatewayService {
     private final GatewayCertificateService gatewayCertificateService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final PackageLimitService packageLimitService;
+    private final CloudModeProperties cloudModeProperties;
+    private final SecurityProperties securityProperties;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public GatewayService(
@@ -39,13 +43,17 @@ public class GatewayService {
             DomainService domainService,
             GatewayCertificateService gatewayCertificateService,
             ApplicationEventPublisher applicationEventPublisher,
-            PackageLimitService packageLimitService
+            PackageLimitService packageLimitService,
+            CloudModeProperties cloudModeProperties,
+            SecurityProperties securityProperties
     ) {
         this.gatewayRepository = gatewayRepository;
         this.domainService = domainService;
         this.gatewayCertificateService = gatewayCertificateService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.packageLimitService = packageLimitService;
+        this.cloudModeProperties = cloudModeProperties;
+        this.securityProperties = securityProperties;
     }
 
     public Page<Gateway> listGateways(UUID appUserId, int page, int size) {
@@ -66,26 +74,35 @@ public class GatewayService {
     public Gateway createGateway(AppUser appUser, GatewayCreateRequest request) {
         packageLimitService.enforce(appUser.getId(), PackageLimitKey.MAX_GATEWAYS,
                 gatewayRepository.countByAppUser_Id(appUser.getId()));
-        AppDomain appDomain = domainService.getDomainById(appUser.getId(), request.appDomainId());
-        validateVerifiedDomain(appDomain);
+        AppDomain appDomain = resolveDomainForNewGateway(appUser, request.appDomainId());
 
         return provisionGateway(appUser, appDomain, request.name(), request.description(), request.status());
     }
 
     /**
-     * System-driven provisioning for a freshly self-registered cloud user
-     * (see {@code CloudSignupService}) - not a user request, so it
-     * deliberately skips both the quota check above (this IS their quota's
-     * one free gateway, not a request against it) and
-     * {@code domainService.getDomainById}'s ownership check ({@code
-     * platformDomain} belongs to the platform/operator, never to the new
-     * user). Reuses the exact same key-generation and certificate-provisioning
-     * logic as a normal user-created gateway.
+     * A non-admin user (self-registered under cloud mode) can never own a
+     * domain of their own (see {@code DomainService.createDomain}), so their
+     * Gateway lands on a randomly chosen one of the admin's verified domains
+     * instead of a caller-supplied one - covers both their initial
+     * auto-provisioned default Gateway ({@code CloudSignupService}) and any
+     * later one, uniformly. The admin (or any user when cloud mode is off)
+     * keeps today's behavior: a caller-supplied, ownership-checked {@code
+     * appDomainId} is required.
      */
-    @Transactional
-    public Gateway createDefaultGateway(AppUser appUser, AppDomain platformDomain) {
-        validateVerifiedDomain(platformDomain);
-        return provisionGateway(appUser, platformDomain, "Default Gateway", "Auto-provisioned on sign-up", GatewayStatus.ACTIVE);
+    private AppDomain resolveDomainForNewGateway(AppUser appUser, UUID requestedDomainId) {
+        if (cloudModeProperties.enabled() && !isBootstrapAdmin(appUser)) {
+            return domainService.pickRandomVerifiedDomain();
+        }
+        if (requestedDomainId == null) {
+            throw new IllegalArgumentException("appDomainId is required.");
+        }
+        AppDomain appDomain = domainService.getDomainById(appUser.getId(), requestedDomainId);
+        validateVerifiedDomain(appDomain);
+        return appDomain;
+    }
+
+    private boolean isBootstrapAdmin(AppUser appUser) {
+        return securityProperties.bootstrapUser().username().equalsIgnoreCase(appUser.getUsername());
     }
 
     private Gateway provisionGateway(AppUser appUser, AppDomain appDomain, String name, String description, GatewayStatus status) {

@@ -130,7 +130,3 @@ app:
     # self-register (see CloudSignupService), gets the free package, and is
     # subject to its limits on Function/Flow/Gateway/Domain creation.
     enabled: ${CLOUD_MODE_ENABLED:false}
-    # Required only when enabled=true: the id of an already-created,
-    # already-verified AppDomain that every self-registered user's
-    # auto-provisioned default Gateway attaches to - see docs/development.md.
-    default-domain-id: ${CLOUD_DEFAULT_DOMAIN_ID:}

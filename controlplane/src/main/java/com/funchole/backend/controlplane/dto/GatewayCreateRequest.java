@@ -19,7 +19,10 @@ public record GatewayCreateRequest(
         @Size(max = 1000, message = "Description must be at most 1000 characters")
         String description,
 
-        @NotNull(message = "App domain id is required")
+        // Required for the admin (or any user when cloud mode is off); a
+        // non-admin user under cloud mode gets a randomly chosen verified
+        // domain instead - see GatewayService.resolveDomainForNewGateway.
+        @Nullable
         UUID appDomainId,
 
         @NotNull(message = "Status is required")
