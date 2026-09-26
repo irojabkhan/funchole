@@ -115,16 +115,15 @@
       if (navEl) navEl.textContent = formatStars(count);
 
       const heroEl = document.getElementById("hero-star-count");
-      if (heroEl) heroEl.textContent = "★ " + formatStars(count);
+      if (heroEl) heroEl.textContent = formatStars(count);
 
       const osEl = document.getElementById("os-star-count");
       if (osEl) osEl.textContent = formatStars(count);
     })
     .catch(() => {
-      // Offline or rate-limited: fall back to plain links, no fabricated count.
-      const navEl = document.getElementById("nav-star-count");
-      if (navEl) navEl.remove();
-      const osEl = document.getElementById("os-star-count");
-      if (osEl) osEl.textContent = "—";
+      // Offline or rate-limited: hide just the count badge, not the whole
+      // "Star on GitHub" link/button - that's still a valid CTA without a
+      // live number, never show a fabricated one instead.
+      document.querySelectorAll(".star-count").forEach((el) => el.remove());
     });
 })();

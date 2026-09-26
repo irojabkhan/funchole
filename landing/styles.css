@@ -154,10 +154,14 @@ h3 {
 .btn-block { width: 100%; }
 
 .star-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-family: var(--font-mono);
   font-size: 0.82em;
   opacity: 0.75;
 }
+.star-count svg { color: var(--accent); }
 
 /* ---------- header ---------- */
 .site-header {
@@ -202,11 +206,21 @@ h3 {
 }
 .main-nav a:hover { color: var(--text-primary); }
 
-.nav-github {
+.main-nav a.nav-star-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 20px;
+  padding: 6px 12px 6px 10px;
+  transition: border-color 160ms var(--ease), color 160ms var(--ease);
 }
+.nav-star-btn svg:first-child { flex-shrink: 0; }
+.main-nav a.nav-star-btn:hover { border-color: var(--accent-border); color: var(--text-primary); }
 
 .header-cta {
   display: flex;
@@ -830,7 +844,10 @@ a:focus-visible, button:focus-visible {
 
 @media (max-width: 860px) {
   .main-nav, .header-cta { display: none; }
-  .menu-toggle { display: flex; }
+  /* .main-nav's flex:1 is what pushes everything after the logo to the
+     right edge on desktop - hidden here, so nothing does that anymore
+     unless the toggle claims the space itself. */
+  .menu-toggle { display: flex; margin-left: auto; }
   .mobile-nav.is-open { display: flex; }
 }
 
